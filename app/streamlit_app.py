@@ -5,13 +5,16 @@ momentum** (it beats SPY on return and Sharpe; see the How-it-works tab for how 
 earlier squeeze->expansion ML theses failed the edge gate). Tabs:
 
     1. Overview        - momentum strategy metrics vs SPY / random baseline + glossary
-    2. Paper Trading   - run a fake-cash account over any window; equity vs SPY,
+    2. Today's Picks   - the 3 best stocks to buy right now + a specific hold
+                         timeline; refresh to live data; log + track forward paper
+                         positions marked to market (fake cash, no real orders)
+    3. Paper Trading   - run a fake-cash account over any window; equity vs SPY,
                          drawdown, current holdings, trade blotter, monthly returns
-    3. Scanner         - today's ranked long candidates (latest_momentum.csv)
-    4. Stock Detail    - per-ticker chart + its momentum rank
-    5. Backtest        - equity vs SPY, drawdown, per-year, monthly returns, trades
-    6. How it works    - the strategy, the failed ML history, honest caveats
-    7. Settings        - read-only config view
+    4. Scanner         - today's ranked long candidates (latest_momentum.csv)
+    5. Stock Detail    - per-ticker chart + its momentum rank
+    6. Backtest        - equity vs SPY, drawdown, per-year, monthly returns, trades
+    7. How it works    - the strategy, the failed ML history, honest caveats
+    8. Settings        - read-only config view
 
 Run with:
     streamlit run app/streamlit_app.py
@@ -21,6 +24,7 @@ advice. Headline returns carry survivorship bias (curated large-cap universe).
 """
 from __future__ import annotations
 
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -32,6 +36,7 @@ import pandas as pd
 import streamlit as st
 
 from src.config import load_config, ensure_paths
+from src.live_paper import add_picks, close_positions, load_ledger, mark_to_market
 from src.paper import run_paper_session
 from src.plotting import (
     candlestick_with_volume,
@@ -40,6 +45,7 @@ from src.plotting import (
     equity_vs_benchmark_chart,
     monthly_returns_heatmap,
 )
+from src.scanner import latest_per_ticker, scan_momentum
 
 
 st.set_page_config(
@@ -77,6 +83,57 @@ def _run_paper_cached(
     cfg = load_config()
     df = pd.read_csv(dataset_path_str, parse_dates=["Date"])
     return run_paper_session(df, cfg, capital=capital, lookback_months=months, start=start, end=end)
+
+
+def _processed_token(processed_dir: Path) -> float:
+    """Max mtime across per-ticker feature files; used to bust the scan cache."""
+    try:
+        return max((p.stat().st_mtime for p in processed_dir.glob("*_features.csv")), default=0.0)
+    except OSError:
+        return 0.0
+
+
+@st.cache_data(show_spinner="Ranking today's universe by momentum...")
+def _live_scan_cached(
+    processed_dir_str: str, token: float, top_pctile: float,
+    max_vix_pctile: float, tickers: tuple,
+) -> dict:
+    """Rank the latest bar of each ticker with the deployed momentum scanner.
+
+    Reuses ``latest_per_ticker`` + ``scan_momentum`` (the validated live
+    counterpart to the backtest), so the picks page is the same logic, not a
+    parallel one. ``token`` (file mtimes) invalidates the cache after a refresh.
+    """
+    snap = latest_per_ticker(Path(processed_dir_str), list(tickers))
+    if snap.empty:
+        return {"empty": True}
+    scan = scan_momentum(snap, top_pctile=top_pctile, max_vix_pctile=max_vix_pctile)
+    row0 = snap.iloc[0]
+    regime = {
+        "spy_above_sma200": int(row0.get("spy_above_sma200", 1) or 0),
+        "vix_pctile": float(row0.get("vix_pctile_252", float("nan"))),
+        "data_date": str(pd.to_datetime(snap["Date"]).max().date()),
+    }
+    return {"empty": False, "scan": scan, "regime": regime}
+
+
+def _refresh_market_data() -> tuple[bool, str]:
+    """Re-download prices and rebuild features via the venv python. (ok, log)."""
+    root = Path(__file__).resolve().parent.parent
+    logs = []
+    for script in ("scripts/download_data.py", "scripts/build_dataset.py"):
+        try:
+            r = subprocess.run(
+                [sys.executable, script], cwd=str(root),
+                capture_output=True, text=True, timeout=1800,
+            )
+        except subprocess.TimeoutExpired:
+            return False, "\n\n".join(logs + [f"$ {script}\n[timed out after 30 min]"])
+        tail = (r.stdout or "")[-1200:] + (r.stderr or "")[-1800:]
+        logs.append(f"$ {script}\n{tail}")
+        if r.returncode != 0:
+            return False, "\n\n".join(logs)
+    return True, "\n\n".join(logs)
 
 
 # ----------------------------------------------------------------------------
@@ -278,6 +335,218 @@ def _render_overview(metrics_df, scan_df) -> None:
         st.markdown("#### Today's top long candidates")
         longs = scan_df[scan_df.get("suggested_action") == "Long"]
         st.dataframe((longs if not longs.empty else scan_df).head(10), use_container_width=True, hide_index=True)
+
+
+def _render_today_picks(cfg, paths) -> None:
+    st.subheader(":dart: Today's Picks - the strategy's best buys right now")
+    st.caption(
+        "The strongest top-decile 60-day-momentum names that pass the regime/trend gate, "
+        "with a specific hold timeline and suggested fake-cash sizing. Plan + track paper "
+        "trades forward. **No real orders are placed.**"
+    )
+
+    processed = paths["data_processed"]
+    mom = cfg.get("momentum", {})
+    bt = cfg.get("backtest", {})
+    paper_cfg = cfg.get("paper", {})
+    hold_days = int(mom.get("hold_days", 20))
+    top_pctile = float(mom.get("top_pctile", 0.90))
+    max_vix = float(bt.get("max_vix_pctile", 0.85))
+    per_pos = float(mom.get("position_size_pct", 0.12))
+    tickers = tuple(cfg.get("data", {}).get("tickers", []))
+
+    # --- Refresh-to-live-data control + freshness ---
+    cbtn, cinfo = st.columns([1.1, 2.9])
+    if cbtn.button("🔄 Refresh to latest prices",
+                   help="Re-downloads prices and rebuilds features (~1-2 min). Then re-ranks."):
+        with st.spinner("Downloading prices and rebuilding features (~1-2 min)..."):
+            ok, log = _refresh_market_data()
+        if ok:
+            st.cache_data.clear()
+            st.success("Data refreshed to the latest available close.")
+        else:
+            st.error("Refresh failed - showing the data already on disk.")
+            with st.expander("Refresh log"):
+                st.code(log)
+    with cinfo:
+        _data_freshness(_safe_read(processed / "SPY_features.csv"))
+
+    res = _live_scan_cached(str(processed), _processed_token(processed),
+                            top_pctile, max_vix, tickers)
+    if res.get("empty"):
+        st.info("No processed data yet. Click **Refresh** above, or run "
+                "`python scripts/download_data.py` then `python scripts/build_dataset.py`.")
+        _render_live_positions(paths)
+        return
+
+    scan = res["scan"]
+    regime = res["regime"]
+    data_date = pd.to_datetime(regime["data_date"])
+    vix_ok = (pd.isna(regime["vix_pctile"])) or (regime["vix_pctile"] <= max_vix)
+    regime_on = (regime["spy_above_sma200"] == 1) and vix_ok
+
+    longs = scan[scan["suggested_action"] == "Long"].head(3) if not scan.empty else scan.iloc[0:0]
+
+    capital = st.number_input(
+        "Paper cash to deploy ($)", min_value=500,
+        value=int(paper_cfg.get("starting_capital", 10000)), step=500,
+        help=f"Each pick is sized at {per_pos:.0%} of this (the deployed position size).",
+    )
+
+    # --- Regime OFF or nothing qualifies: be honest, hold cash ---
+    if not regime_on or longs.empty:
+        why = []
+        if regime["spy_above_sma200"] != 1:
+            why.append("SPY is **below** its 200-day average")
+        if not vix_ok:
+            why.append(f"VIX is elevated (pctile {regime['vix_pctile']:.2f} > {max_vix:.2f})")
+        if regime_on and longs.empty:
+            why.append("no name currently clears the top-decile + trend filter")
+        st.warning(
+            ":lock: **No new buys today - the strategy is in cash.** "
+            + ("Reason: " + "; ".join(why) + "." if why else "")
+            + " By design it sits out weak/unconfirmed markets rather than forcing trades."
+        )
+        if not scan.empty:
+            with st.expander("If the gate were open, these would lead (context only)"):
+                lead = scan.sort_values("momentum_rank", ascending=False).head(5)
+                st.dataframe(lead[["ticker", "close", "momentum_rank", "ret_60d",
+                                   "rs_vs_spy", "suggested_action"]],
+                             use_container_width=True, hide_index=True)
+        _render_live_positions(paths)
+        return
+
+    # --- Regime ON: show the timeline + picks ---
+    target_exit = (data_date + pd.offsets.BDay(hold_days)).normalize()
+    cal_days = (target_exit - data_date).days
+    st.success(
+        f":white_check_mark: **Regime ON.** Buy the {len(longs)} name(s) below near the next "
+        f"session, hold **~{hold_days} trading days** (~{cal_days} calendar days), and exit "
+        f"on/around **{target_exit:%a %b %d, %Y}**."
+    )
+    st.caption(f"Signal date (last close): **{data_date:%b %d, %Y}**. The strategy uses a "
+               f"time-based exit - it sells on the timeline regardless of price.")
+
+    picks_records = []
+    cols = st.columns(len(longs))
+    for i, (_, r) in enumerate(longs.iterrows()):
+        price = float(r["close"])
+        alloc = capital * per_pos
+        shares = int(alloc // price) if price > 0 else 0
+        spend = shares * price
+        with cols[i]:
+            st.markdown(f"#### {i + 1}. {r['ticker']}")
+            st.metric("Buy ~price", _money(price), help="Latest close (paper entry).")
+            st.metric("Momentum rank", f"{r['momentum_rank']:.3f}",
+                      help="Percentile of 60-day return across the universe (1.0 = strongest).")
+            st.write(f"**60d return:** {_pct(r.get('ret_60d'))}")
+            st.write(f"**RS vs SPY (20d):** {_pct(r.get('rs_vs_spy'))}")
+            st.write(f"**Buy:** {shares} sh ≈ {_money(spend)}")
+            st.write(f"**Sell ~{target_exit:%b %d}**")
+        picks_records.append({
+            "ticker": str(r["ticker"]),
+            "entry_date": str(data_date.date()),
+            "entry_price": price,
+            "shares": shares,
+            "alloc": alloc,
+            "hold_days": hold_days,
+            "target_exit_date": str(target_exit.date()),
+        })
+
+    plan = pd.DataFrame([{
+        "Buy": p["ticker"], "Shares": p["shares"], "Entry ~$": round(p["entry_price"], 2),
+        "Cost ~$": round(p["shares"] * p["entry_price"], 2),
+        "Hold (trading days)": p["hold_days"],
+        "Sell on/around": p["target_exit_date"],
+    } for p in picks_records])
+    st.markdown("##### The plan")
+    st.dataframe(plan, use_container_width=True, hide_index=True)
+    total_cost = float((plan["Cost ~$"]).sum())
+    st.caption(f"Total deployed ≈ {_money(total_cost)} of {_money(capital)} "
+               f"({total_cost / capital:.0%}); the rest stays in cash.")
+
+    if st.button("➕ Add these picks to my paper portfolio", type="primary"):
+        added, skipped = add_picks(paths["data_paper"], picks_records)
+        msg = f"Logged {added} pick(s)."
+        if skipped:
+            msg += f" Skipped {skipped} already-open ticker(s)."
+        st.success(msg)
+        st.rerun()
+
+    st.caption(
+        ":warning: Survivorship caveat: this universe is today's known large-caps, so the live "
+        "edge is likely smaller than the headline backtest. Sizing/timeline are suggestions, not "
+        "advice. Research / paper only - **no real orders are placed**."
+    )
+
+    _render_live_positions(paths)
+
+
+def _render_live_positions(paths) -> None:
+    st.markdown("---")
+    st.markdown("### :ledger: My live paper positions (forward test)")
+    ledger = load_ledger(paths["data_paper"])
+    if ledger is None or ledger.empty:
+        st.caption("No paper positions yet. Use **Add these picks** above to start a forward test - "
+                   "they'll be marked to market here on your next visit.")
+        return
+
+    mtm = mark_to_market(ledger, paths["data_processed"])
+    if not mtm.empty:
+        total_cost = float((mtm["entry_price"] * mtm["shares"]).sum())
+        total_val = float(mtm["market_value"].sum())
+        total_pnl = float(mtm["unrealized_pnl"].sum())
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Open positions", int(len(mtm)))
+        c2.metric("Market value", _money(total_val), delta=_money(total_pnl))
+        c3.metric("Unrealized", _pct(total_pnl / total_cost if total_cost else 0.0))
+
+        disp = mtm.copy()
+        disp["unrealized_pct_disp"] = disp["unrealized_pct"] * 100
+        disp["action"] = disp["due"].map(lambda d: "SELL (past target)" if d else "hold")
+        order = ["ticker", "entry_date", "entry_price", "shares", "last_close",
+                 "market_value", "unrealized_pnl", "unrealized_pct_disp",
+                 "target_exit_date", "days_to_target", "action"]
+        cc = st.column_config
+        st.dataframe(
+            disp[order], use_container_width=True, hide_index=True,
+            column_config={
+                "ticker": cc.TextColumn("Ticker"),
+                "entry_date": cc.TextColumn("Entry"),
+                "entry_price": cc.NumberColumn("Entry $", format="$%.2f"),
+                "shares": cc.NumberColumn("Shares"),
+                "last_close": cc.NumberColumn("Now $", format="$%.2f"),
+                "market_value": cc.NumberColumn("Mkt value", format="$%.2f"),
+                "unrealized_pnl": cc.NumberColumn("Unreal P&L", format="$%.2f"),
+                "unrealized_pct_disp": cc.NumberColumn("Unreal %", format="%.2f%%"),
+                "target_exit_date": cc.TextColumn("Target exit"),
+                "days_to_target": cc.NumberColumn("Days left"),
+                "action": cc.TextColumn("Action"),
+            },
+        )
+        due = disp[disp["due"]]
+        if not due.empty:
+            st.warning(f":alarm_clock: {len(due)} position(s) reached the ~hold-window target exit: "
+                       f"**{', '.join(due['ticker'].astype(str))}**. The strategy would sell these now.")
+
+        to_close = st.multiselect("Close position(s) at last close", list(mtm["ticker"].astype(str)),
+                                  default=list(due["ticker"].astype(str)))
+        if st.button("Record exit for selected") and to_close:
+            n = close_positions(paths["data_paper"], to_close, paths["data_processed"])
+            st.success(f"Closed {n} position(s) at last close.")
+            st.rerun()
+    else:
+        st.caption("No open positions right now.")
+
+    closed = ledger[ledger["status"] == "closed"]
+    if not closed.empty:
+        realized = pd.to_numeric(closed["realized_pnl"], errors="coerce").fillna(0.0).sum()
+        with st.expander(f"Closed paper trades ({len(closed)}) - realized P&L {_money(realized)}"):
+            st.dataframe(
+                closed[["ticker", "entry_date", "entry_price", "exit_date",
+                        "exit_price", "shares", "realized_pnl"]],
+                use_container_width=True, hide_index=True,
+            )
 
 
 def _render_paper(paths, spy_df) -> None:
@@ -573,23 +842,25 @@ def main() -> None:
     _data_freshness(spy_df)
 
     tabs = st.tabs([
-        "Overview", "Paper Trading", "Scanner", "Stock Detail", "Backtest",
-        "How it works", "Settings",
+        "Overview", "Today's Picks", "Paper Trading", "Scanner", "Stock Detail",
+        "Backtest", "How it works", "Settings",
     ])
 
     with tabs[0]:
         _render_overview(metrics_df, scan_df)
     with tabs[1]:
-        _render_paper(paths, spy_df)
+        _render_today_picks(cfg, paths)
     with tabs[2]:
-        _render_scanner(scan_df)
+        _render_paper(paths, spy_df)
     with tabs[3]:
-        _render_stock_detail(cfg, paths, scan_df)
+        _render_scanner(scan_df)
     with tabs[4]:
-        _render_backtest(metrics_df, equity_df, trade_log_df, spy_df)
+        _render_stock_detail(cfg, paths, scan_df)
     with tabs[5]:
-        _render_how_it_works()
+        _render_backtest(metrics_df, equity_df, trade_log_df, spy_df)
     with tabs[6]:
+        _render_how_it_works()
+    with tabs[7]:
         st.subheader("Settings (read-only view of config.yaml)")
         st.json(cfg)
         st.caption(

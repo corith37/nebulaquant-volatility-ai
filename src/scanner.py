@@ -125,6 +125,59 @@ def scan_momentum(
     return out
 
 
+def today_picks(cfg: dict, processed_dir: Path, top_n: int = 3) -> dict:
+    """Compute the deployed strategy's buys *right now*: the single source of truth.
+
+    Used by both the dashboard's "Today's Picks" page and the Alpaca executor so
+    they always act on identical, regime-gated, ranked momentum picks. Returns a
+    JSON-friendly dict: regime status, the signal date, the time-exit target date
+    (entry + ``hold_days`` trading days), and the top-N long picks.
+    """
+    mom = cfg.get("momentum", {})
+    bt = cfg.get("backtest", {})
+    hold_days = int(mom.get("hold_days", 20))
+    top_pctile = float(mom.get("top_pctile", 0.90))
+    max_vix = float(bt.get("max_vix_pctile", 0.85))
+    tickers = cfg.get("data", {}).get("tickers", [])
+
+    snap = latest_per_ticker(Path(processed_dir), tickers)
+    if snap.empty or "xs_ret60_rank" not in snap.columns:
+        return {"empty": True}
+
+    scan = scan_momentum(snap, top_pctile=top_pctile, max_vix_pctile=max_vix)
+    data_date = pd.to_datetime(snap["Date"]).max()
+    row0 = snap.iloc[0]
+    vix_pct = float(row0.get("vix_pctile_252", float("nan")))
+    regime_on = (int(row0.get("spy_above_sma200", 1) or 0) == 1) and (
+        pd.isna(vix_pct) or vix_pct <= max_vix
+    )
+    target_exit = (data_date + pd.offsets.BDay(hold_days)).normalize()
+    longs = scan[scan["suggested_action"] == "Long"].head(int(top_n))
+
+    def _f(v):
+        return float(v) if pd.notna(v) else None
+
+    picks = [{
+        "ticker": str(r["ticker"]),
+        "price": float(r["close"]),
+        "momentum_rank": float(r["momentum_rank"]),
+        "ret_60d": _f(r.get("ret_60d")),
+        "rs_vs_spy": _f(r.get("rs_vs_spy")),
+    } for _, r in longs.iterrows()]
+
+    return {
+        "empty": False,
+        "data_date": str(data_date.date()),
+        "regime_on": bool(regime_on),
+        "spy_above_sma200": int(row0.get("spy_above_sma200", 1) or 0),
+        "vix_pctile": None if pd.isna(vix_pct) else round(vix_pct, 4),
+        "hold_days": hold_days,
+        "target_exit_date": str(target_exit.date()),
+        "n_long_total": int((scan["suggested_action"] == "Long").sum()),
+        "picks": picks,
+    }
+
+
 def scan(
     model: TwoStageModel,
     latest_df: pd.DataFrame,

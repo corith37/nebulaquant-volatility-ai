@@ -1,3 +1,11 @@
+# Secrets / API keys (Alpaca etc.) - NEVER commit these
+.env
+*.env
+secrets/
+*api_key*
+*secret*.json
+*alpaca*key*
+
 # Python
 __pycache__/
 *.py[cod]

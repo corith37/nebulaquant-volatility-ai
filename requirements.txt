@@ -13,3 +13,6 @@ matplotlib>=3.7.0
 # Optional: backtest-driven hyperparameter search. The optimizer falls back to a
 # reproducible random search if optuna is not installed.
 optuna>=3.4.0
+# Optional: Alpaca broker execution for forward paper/live trading. Only needed
+# to run scripts/execute_alpaca.py; the rest of the tool works without it.
+alpaca-py>=0.20.0

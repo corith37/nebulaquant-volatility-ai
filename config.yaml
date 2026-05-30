@@ -80,7 +80,7 @@ data:
     - NEM
     # High-beta / growth
     - SHOP
-    - SQ
+    - XYZ   # Block Inc. (formerly SQ; NYSE ticker changed SQ -> XYZ in 2025)
     - UBER
     - COIN
     - PLTR
@@ -185,6 +185,18 @@ scanner:
 paper:
   lookback_months: 12          # default recent window to replay
   starting_capital: 10000      # fake cash to start the account with
+
+# Broker execution for forward paper (and, later, live) trading via Alpaca.
+# The executor (scripts/execute_alpaca.py) trades the SAME regime-gated momentum
+# picks the dashboard shows. Defaults to PAPER and dry-run. Keys come from env
+# vars / a gitignored .env (APCA_API_KEY_ID, APCA_API_SECRET_KEY) -- never here.
+execution:
+  broker: "alpaca"
+  paper: true                  # paper account (no real money). Flip with care.
+  target_positions: 3          # max concurrent names (the "3 best stocks")
+  deploy_fraction: 0.90        # fraction of equity to put to work; rest stays cash
+  min_notional: 1.0            # skip buys smaller than this ($)
+  hold_days: 20                # time-exit horizon (mirrors momentum.hold_days)
 
 # Backtest-driven hyperparameter optimization.
 optimization:
