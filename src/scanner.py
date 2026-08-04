@@ -19,6 +19,18 @@ from src.utils import setup_logger
 
 logger = setup_logger("nebulaquant.scanner")
 
+# Forward-looking label columns written by src.dataset. They are NaN for the most
+# recent ~`horizon` bars by construction (the future hasn't happened yet), so they
+# must be excluded when picking the latest *tradeable* bar - otherwise the scanner
+# silently reports picks from ~10 trading days ago.
+LABEL_COLS = (
+    "expansion_label",
+    "tb_label",
+    "tb_return",
+    "tb_exit_idx",
+    "sample_weight",
+)
+
 
 def suggest_action(row: pd.Series, threshold: float) -> str:
     """Map a calibrated score + confirmations onto a watch label."""
@@ -48,7 +60,8 @@ def latest_per_ticker(processed_dir: Path, tickers: List[str]) -> pd.DataFrame:
         df = pd.read_csv(path, parse_dates=["Date"])
         if df.empty:
             continue
-        last = df.dropna().tail(1)
+        feat_cols = [c for c in df.columns if c not in LABEL_COLS]
+        last = df.dropna(subset=feat_cols).tail(1)
         if last.empty:
             continue
         frames.append(last)

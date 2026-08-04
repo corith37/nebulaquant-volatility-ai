@@ -5,8 +5,10 @@ to `data/raw/`. Failures on individual tickers are logged and skipped, not raise
 """
 from __future__ import annotations
 
+from datetime import datetime, time
 from pathlib import Path
 from typing import Iterable, List, Optional
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
@@ -15,10 +17,37 @@ from src.utils import setup_logger
 
 logger = setup_logger("nebulaquant.data_loader")
 
+_EASTERN = ZoneInfo("America/New_York")
+# US equities close at 16:00 ET; allow a short buffer for the final print to settle.
+_SETTLED_AFTER = time(16, 15)
+
 
 def safe_filename(ticker: str) -> str:
     """Map a ticker symbol to a filesystem-safe base name (e.g. ^VIX -> _VIX)."""
     return ticker.replace("^", "_").replace("/", "_").replace("\\", "_")
+
+
+def drop_partial_bar(df: pd.DataFrame, ticker: str = "") -> pd.DataFrame:
+    """Drop a still-forming bar for the current session.
+
+    Run intraday, yfinance returns a row for today whose Close is the *live* price
+    and whose Volume is only the session-to-date total. Feeding that into daily
+    features makes signals flicker through the day and depresses relative-volume,
+    so we keep only settled sessions. After 16:15 ET today's bar is final and kept.
+    """
+    if df.empty or "Date" not in df.columns:
+        return df
+
+    now_et = datetime.now(_EASTERN)
+    if now_et.time() >= _SETTLED_AFTER:
+        return df
+
+    today_et = pd.Timestamp(now_et.date())
+    last = pd.to_datetime(df["Date"].iloc[-1])
+    if last.normalize() == today_et:
+        logger.info(f"[{ticker}] dropping unsettled {today_et.date()} bar (market still open)")
+        return df.iloc[:-1]
+    return df
 
 
 def download_ticker(
@@ -57,6 +86,7 @@ def download_ticker(
     df.index.name = "Date"
 
     df = df.reset_index()
+    df = drop_partial_bar(df, ticker)
     df["Ticker"] = ticker
 
     # Standardize column names if yfinance returns "Adj Close" etc.

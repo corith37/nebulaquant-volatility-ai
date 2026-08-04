@@ -35,16 +35,19 @@ This is **rules-based, not ML.** Because every input uses only trailing data and
 there is no model to fit, the whole-period backtest *is* the honest out-of-sample
 estimate.
 
-### Results (2015–2026, production engine: costs, slippage, intrabar fills)
+### Results (2015-01-01 → 2026-08-03, production engine: costs, slippage, intrabar fills)
 
 | Metric | Momentum strategy | SPY buy & hold |
 |---|---:|---:|
-| Total return | **+1006%** | +264% |
-| **Sharpe** | **1.18** | 0.79 |
-| Win rate | 57% | — |
-| Profit factor | 1.55 | — |
-| Expectancy | +$88 / trade (988 trades) | — |
-| Max drawdown | −29% | — |
+| Total return | **+1253%** | +264% |
+| **Sharpe** | **1.20** | 0.78 |
+| Win rate | 59% | — |
+| Profit factor | 1.75 | — |
+| Expectancy | +$126 / trade (1009 trades) | — |
+| Max drawdown | −30% | — |
+
+Regenerate these numbers by re-running the workflow below; the table is only as
+current as the last `download_data.py` run.
 
 - **Beats SPY in 9 of 11 full years.** The two misses were *underperformance in up
   years* (2021, 2023), not losses.
@@ -151,6 +154,23 @@ python scripts/run_momentum_scanner.py   # today's ranked longs -> data/predicti
 streamlit run app/streamlit_app.py       # dashboard
 ```
 
+**Keeping the data current.** The four commands above are the full refresh — run
+them in that order whenever the data has gone stale. `download_data.py` always
+re-pulls the whole history from `data.start_date` (there is no incremental
+append), so a refresh is idempotent: it simply overwrites `data/raw/`.
+
+Two things it deliberately will *not* do:
+
+- **It never stores an unsettled bar.** Run before 16:15 ET, the current
+  session's row is dropped, because yfinance reports a live price and a
+  partial volume for it — which would make signals flicker through the day and
+  understate relative volume. Run after the close, today's bar is included.
+- **It does not pick up universe changes on its own.** Tickers come from
+  `data.tickers` in `config.yaml`; a delisted or renamed symbol keeps its stale
+  CSV until you edit that list. Check the `Downloaded N/M tickers successfully`
+  line at the end of the run — anything short of `M/M` means a symbol is failing
+  and its file is silently aging.
+
 **Legacy ML path (retained for reference; did not beat SPY):**
 
 ```bash
@@ -180,7 +200,7 @@ python scripts/run_scanner.py  # legacy ML scanner -> data/predictions/latest_pr
 
 The project's rule: **if a strategy does not beat SPY buy-and-hold AND random entry
 out-of-sample, there is no demonstrated edge — iterate before trusting it.** The
-momentum strategy clears both, on a statistically meaningful 988 trades. When you
+momentum strategy clears both, on a statistically meaningful 1009 trades. When you
 read the dashboard, keep the survivorship caveat in mind and weight the
 **risk-adjusted (Sharpe) and same-universe** comparisons over the raw return.
 
