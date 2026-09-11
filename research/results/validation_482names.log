@@ -1,0 +1,24 @@
+VALIDATION UNIVERSE: 482 names, 359,294 rows, 2015-02-10..2018-01-31
+walk-forward done [135s] OOS rows=219,223 blocks=11
+
+OOS IC vs fwd 5d residual: IC=+0.0255 NW t=+4.11 IR=+0.309 hit=0.623
+  factor-neutral portfolio @   0bp: Sharpe=+1.715 ann=+3.25% t=+2.11 vol=1.90% maxdd=-1.32%
+  factor-neutral portfolio @ 2.5bp: Sharpe=+1.224 ann=+2.32% t=+1.52 vol=1.90% maxdd=-1.53%
+  factor-neutral portfolio @   5bp: Sharpe=+0.738 ann=+1.40% t=+0.92 vol=1.90% maxdd=-1.73%
+
+=== single-signal ICs in the 505-name universe (NW t, lag 20) ===
+            signal        ic         t
+       idio_vol_63 -0.014054 -2.137321
+             clv_1 -0.005394 -2.051793
+          beta_mkt -0.009709 -1.844070
+         gap_abs_5 -0.006731 -1.822892
+     ln_dollar_vol -0.008719 -1.231013
+on_intra_spread_21  0.002291  0.364239
+         amihud_21  0.004249  0.624825
+            mom_63  0.007090  0.720518
+     dist_52w_high  0.012325  1.328283
+             rev_3  0.011650  2.105507
+          rev_5_sc  0.014758  2.201832
+             rev_5  0.014665  2.254351
+             rev_1  0.009383  2.609266
+        mom_252_21  0.023653  2.875584

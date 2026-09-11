@@ -1,0 +1,48 @@
+=== FACTOR-NEUTRAL LONG/SHORT (5d hold, 2.5bp one-way, 50bp/yr borrow) ===
+                                sharpe  gross_sharpe  ann_return  ann_vol  max_dd  t_stat_nw  ann_turn  n_names  beta_to_mkt
+name                                                                                                                        
+ML model (factor-neutral)        0.738         1.040       0.031    0.042  -0.051      2.176    39.818   74.496        0.134
+reversal 5d                      0.031         0.401       0.002    0.051  -0.107      0.139    67.393   74.492        0.265
+vol-scaled reversal 5d           0.024         0.415       0.001    0.049  -0.111      0.118    67.939   74.490        0.273
+reversal 1d                     -0.169         0.480      -0.005    0.028  -0.089     -0.365    67.167   74.489        0.253
+residual momentum 12-1           0.616         0.717       0.033    0.054  -0.083      1.707    11.166   74.496       -0.045
+residual momentum 3m            -0.002         0.112      -0.000    0.063  -0.120      0.083    18.943   74.494       -0.238
+overnight gap (short high-gap)  -0.425        -0.079      -0.021    0.049  -0.169     -1.165    59.464   74.495        0.305
+overnight-intraday spread       -0.062         0.170      -0.003    0.045  -0.128     -0.097    32.077   74.493        0.117
+
+=== RANDOM-SIGNAL NULL (construction sanity check) ===
+  Sharpe mean=-1.182  sd=0.262  min=-1.701  max=-0.815
+  (a sound construction should centre near zero minus a small cost drag)
+
+=== ML model: cost sensitivity ===
+ cost_bps  sharpe  ann_ret      t
+    0.000   0.984    0.041  2.866
+    1.000   0.885    0.037  2.590
+    2.500   0.738    0.031  2.176
+    5.000   0.494    0.021  1.485
+   10.000   0.013    0.001  0.099
+   20.000  -0.921   -0.039 -2.686
+
+=== ML model: holding period ===
+ hold  sharpe  ann_ret  ann_turn      t
+    2   0.520    0.023    76.158  1.472
+    3   0.630    0.027    56.993  1.819
+    5   0.738    0.031    39.818  2.176
+   10   0.779    0.030    22.990  2.250
+   21   0.735    0.026    12.727  2.060
+
+=== Does neutralisation matter? (ML model, 5d) ===
+     market beta + 4 PCs: Sharpe=+0.738 ann=+3.09% t=+2.18 corr_mkt=+0.134
+        market beta only: Sharpe=+0.460 ann=+2.25% t=+1.37 corr_mkt=+0.127
+     dollar-neutral only: Sharpe=+0.738 ann=+3.09% t=+2.18 corr_mkt=+0.134
+
+=== ML model: year by year (net) ===
+  2020: ann= +6.59% sharpe= +1.27 maxdd=-2.01% n=251
+  2021: ann= -0.08% sharpe= -0.02 maxdd=-4.17% n=252
+  2022: ann= +4.04% sharpe= +1.03 maxdd=-4.39% n=251
+  2023: ann= +3.26% sharpe= +0.98 maxdd=-2.13% n=250
+  2024: ann= +0.91% sharpe= +0.22 maxdd=-3.83% n=252
+  2025: ann= +8.05% sharpe= +2.00 maxdd=-2.12% n=250
+  2026: ann= -2.93% sharpe= -0.57 maxdd=-3.83% n=160
+
+saved

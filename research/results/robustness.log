@@ -1,0 +1,32 @@
+=== 1. NEUTRALISATION LADDER (what each factor removal is worth) ===
+     market beta + 4 PCs: net Sharpe=+0.738  ann=+3.09%  t=+2.18
+            beta + 2 PCs: net Sharpe=+0.674  ann=+2.93%  t=+1.98
+        market beta only: net Sharpe=+0.460  ann=+2.25%  t=+1.37
+     dollar-neutral only: net Sharpe=-0.156  ann=-0.93%  t=-0.34
+
+=== 2. NULL DISTRIBUTIONS ===
+  iid random, ZERO cost   : mean=-0.045 sd=0.347 p95=+0.575
+  iid random, 2.5bp cost  : mean=-1.101 sd=0.357 p95=-0.451
+  cross-sec permutation   : mean=-0.450 sd=0.349 p95=+0.080
+  MODEL Sharpe=+0.738   empirical p-value vs permutation null = 0.0000
+
+=== 3. PROBABILITY OF BACKTEST OVERFITTING (CSCV) ===
+  15 configs (hold x max-weight), 1666 days
+  PBO = 0.690    (>0.5 means the selection rule is worse than random)
+  config Sharpe spread: min=+0.518 max=+0.779
+
+=== 4. DEFLATED SHARPE RATIO ===
+  observed annual Sharpe = +0.738   trials counted = 33
+  DSR = P(true Sharpe > 0 | selection) = 0.9184
+  skew=+0.34 exkurt=+3.85 n=1666
+
+=== 5. SUBPERIOD STABILITY (net, 2.5bp) ===
+    first half: Sharpe=+0.934 ann=+3.93% t=+1.80 n=833
+   second half: Sharpe=+0.540 ann=+2.25% t=+1.24 n=833
+
+=== 6. CAPACITY / IMPLEMENTATION ===
+  mean gross exposure       0.890
+  mean # positions          74.1
+  mean # positions >0.5%    57.0
+  largest position          0.059
+  annual turnover           39.8x

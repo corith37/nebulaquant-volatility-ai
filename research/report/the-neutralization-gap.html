@@ -1,0 +1,1213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Why an ML swing model's alpha was invisible in the portfolio.">
+<style>html{color-scheme:light dark}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>The Neutralization Gap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#f5f7f9; --surface:#ffffff; --surface-2:#eaeef3; --surface-3:#e0e6ee;
+  --ink:#101620; --ink-2:#48545f; --ink-3:#7b8794;
+  --rule:#d8dfe7; --rule-2:#c3ccd7;
+  --accent:#1c5cab; --accent-2:#2a78d6; --accent-soft:#e6edf9;
+  --pos:#1c5cab; --neg:#c33c3d; --warn:#b07000;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --shadow:0 1px 2px rgba(16,22,32,.05), 0 8px 24px -12px rgba(16,22,32,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    --ground:#0d1116; --surface:#141922; --surface-2:#1b212b; --surface-3:#232b37;
+    --ink:#e8edf4; --ink-2:#a4b0c0; --ink-3:#78838f;
+    --rule:#232a35; --rule-2:#333c4a;
+    --accent:#6ba4ef; --accent-2:#3987e5; --accent-soft:#152437;
+    --pos:#6ba4ef; --neg:#e66767; --warn:#d9a441;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0d1116; --surface:#141922; --surface-2:#1b212b; --surface-3:#232b37;
+  --ink:#e8edf4; --ink-2:#a4b0c0; --ink-3:#78838f;
+  --rule:#232a35; --rule-2:#333c4a;
+  --accent:#6ba4ef; --accent-2:#3987e5; --accent-soft:#152437;
+  --pos:#6ba4ef; --neg:#e66767; --warn:#d9a441;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"Newsreader",Georgia,"Times New Roman",serif;
+  font-size:18px; line-height:1.65; font-optical-sizing:auto;
+  -webkit-font-smoothing:antialiased;
+}
+.mono,code,th,td,.num,.eyebrow,.chip,.tick,figcaption .src{
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-variant-numeric:tabular-nums;
+}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+.col{max-width:70ch;margin:0 auto}
+section{padding:56px 0;border-top:1px solid var(--rule)}
+section:first-of-type{border-top:0}
+h1,h2,h3{text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,5.2vw,3.9rem);line-height:1.04;font-weight:600;letter-spacing:-.022em}
+h2{font-size:clamp(1.6rem,3vw,2.1rem);line-height:1.15;font-weight:600;letter-spacing:-.015em;margin-bottom:.55em}
+h3{font-size:1.18rem;font-weight:600;letter-spacing:-.008em;margin:2.1em 0 .5em}
+p{margin:0 0 1.1em}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+a:hover{border-bottom-color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+strong{font-weight:600}
+em{font-style:italic}
+
+.eyebrow{
+  font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:500;margin-bottom:1.4em;display:flex;
+  align-items:center;gap:.85em
+}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+
+/* ---------- hero ---------- */
+.hero{padding:76px 0 44px;border-top:0}
+.kicker{
+  font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:2.2em;font-weight:500
+}
+.lede{font-size:1.32rem;line-height:1.5;color:var(--ink-2);margin:1.5em 0 0;max-width:62ch}
+.lede b{color:var(--ink);font-weight:600}
+
+.statrow{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);
+  border-radius:10px;overflow:hidden;margin-top:46px
+}
+.stat{background:var(--surface);padding:18px 20px}
+.stat .v{font-family:"IBM Plex Mono",monospace;font-size:1.62rem;font-weight:500;
+  letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat .k{font-family:"IBM Plex Mono",monospace;font-size:.63rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-3);margin-top:8px}
+.stat .sub{font-size:.82rem;color:var(--ink-3);margin-top:3px;font-family:"Newsreader",serif}
+
+/* ---------- verdict chips ---------- */
+.chip{
+  display:inline-flex;align-items:center;gap:.5em;font-size:.63rem;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;padding:.34em .7em;border-radius:4px;
+  border:1px solid;white-space:nowrap;vertical-align:middle
+}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip.ok{color:var(--pos);border-color:color-mix(in srgb,var(--pos) 32%,transparent);
+  background:color-mix(in srgb,var(--pos) 8%,transparent)}
+.chip.no{color:var(--neg);border-color:color-mix(in srgb,var(--neg) 32%,transparent);
+  background:color-mix(in srgb,var(--neg) 8%,transparent)}
+.chip.mid{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 34%,transparent);
+  background:color-mix(in srgb,var(--warn) 9%,transparent)}
+
+/* ---------- findings ---------- */
+.finding{
+  display:grid;grid-template-columns:2.6rem 1fr;gap:0 1.3rem;
+  padding:26px 0;border-top:1px solid var(--rule)
+}
+.finding:first-of-type{border-top:0}
+.fnum{font-family:"IBM Plex Mono",monospace;font-size:.82rem;color:var(--ink-3);
+  padding-top:.35em;font-weight:500}
+.finding h3{margin:0 0 .35em;font-size:1.1rem}
+.finding p{margin:0 0 .6em;color:var(--ink-2);font-size:.97rem}
+.finding p:last-child{margin-bottom:0}
+
+/* ---------- evidence blocks ---------- */
+.evidence{
+  background:var(--surface);border:1px solid var(--rule);border-radius:12px;
+  padding:26px 28px 22px;margin:34px 0;box-shadow:var(--shadow)
+}
+.evidence.wide{max-width:none}
+.evidence h3{margin:0 0 .2em;font-size:1.05rem}
+.evidence .cap{font-size:.88rem;color:var(--ink-3);margin:0 0 18px;line-height:1.5}
+figcaption{font-size:.85rem;color:var(--ink-3);margin-top:14px;line-height:1.55}
+figcaption .src{font-size:.76rem}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;margin:0 -4px}
+table{border-collapse:collapse;width:100%;font-size:.83rem}
+th,td{padding:8px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--rule)}
+th{font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:600;border-bottom:1px solid var(--rule-2);text-align:right}
+th:first-child,td:first-child{text-align:left;font-family:"Newsreader",serif;font-size:.94rem;white-space:normal}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surface-2)}
+td.pos{color:var(--pos)} td.neg{color:var(--neg)}
+tr.hl td{background:var(--accent-soft);font-weight:500}
+tr.hl td:first-child{font-weight:600}
+
+/* ---------- charts ---------- */
+.chart{width:100%;display:block;overflow:visible}
+.chart text{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.tick{font-size:10px;fill:var(--ink-3)}
+.axline{stroke:var(--rule);stroke-width:1}
+.zeroline{stroke:var(--rule-2);stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin:14px 0 2px;
+  font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--ink-2)}
+.legend i{width:12px;height:2.5px;border-radius:2px;display:inline-block;
+  margin-right:7px;vertical-align:middle}
+#tip{
+  position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;
+  background:var(--surface);border:1px solid var(--rule-2);border-radius:7px;
+  padding:8px 11px;font-family:"IBM Plex Mono",monospace;font-size:.72rem;
+  color:var(--ink);box-shadow:var(--shadow);z-index:50;line-height:1.6;
+  white-space:nowrap
+}
+#tip b{font-weight:600}
+#tip .r{display:flex;justify-content:space-between;gap:14px}
+#tip .sw{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:2px solid var(--accent);padding:2px 0 2px 20px;margin:26px 0;
+  color:var(--ink-2);font-size:.97rem
+}
+.note.warn{border-left-color:var(--warn)}
+.note .lbl{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:.5em;font-weight:500}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.35em 1.4em;font-size:.9rem;
+  margin:1.2em 0;align-items:baseline}
+.kv dt{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.kv dd{margin:0;color:var(--ink-2)}
+
+ul,ol{margin:0 0 1.1em;padding-left:1.3em}
+li{margin-bottom:.5em}
+li::marker{color:var(--ink-3)}
+
+code{font-size:.86em;background:var(--surface-2);padding:.14em .42em;border-radius:4px;
+  border:1px solid var(--rule)}
+pre{background:var(--surface);border:1px solid var(--rule);border-radius:10px;
+  padding:16px 18px;overflow-x:auto;font-size:.78rem;line-height:1.6;margin:20px 0}
+pre code{background:none;border:0;padding:0}
+
+footer{padding:44px 0 70px;border-top:1px solid var(--rule);color:var(--ink-3);font-size:.86rem}
+@media (max-width:640px){
+  body{font-size:17px}
+  .wrap{padding:0 20px}
+  .finding{grid-template-columns:1fr;gap:.4rem}
+  .fnum{padding-top:0}
+  .evidence{padding:20px 18px 18px;border-radius:10px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+
+<div id="tip"></div>
+
+<div class="wrap">
+
+<!-- ============================ HERO ============================ -->
+<section class="hero">
+  <div class="col">
+    <div class="kicker">Quantitative research note &middot; 31 August 2026</div>
+    <h1>The alpha was there the whole time. The portfolio couldn't see it.</h1>
+    <p class="lede">A machine-learning swing model on 76 US large caps predicts 5-day
+    residual returns with an out-of-sample information coefficient of <b>+0.0240
+    (t&nbsp;=&nbsp;3.86)</b>, and it replicates on an independent 482-name universe at
+    <b>+0.0255 (t&nbsp;=&nbsp;4.11)</b>. Traded dollar-neutral it loses money. Traded
+    neutral to the <em>same factor space the prediction is defined in</em>, it earns
+    a net Sharpe of <b>0.74</b>. That gap &mdash; not the signal &mdash; is the finding.</p>
+  </div>
+
+  <div class="statrow">
+    <div class="stat"><div class="v" id="s-sharpe">&mdash;</div><div class="k">Net Sharpe</div><div class="sub">after 2.5&nbsp;bp costs</div></div>
+    <div class="stat"><div class="v" id="s-ann">&mdash;</div><div class="k">Annual return</div><div class="sub">unlevered, market-neutral</div></div>
+    <div class="stat"><div class="v" id="s-vol">&mdash;</div><div class="k">Annual vol</div><div class="sub">max DD <span id="s-dd"></span></div></div>
+    <div class="stat"><div class="v" id="s-t">&mdash;</div><div class="k">NW t-stat</div><div class="sub">1,666 OOS days</div></div>
+    <div class="stat"><div class="v" id="s-ic">&mdash;</div><div class="k">OOS IC</div><div class="sub">t = <span id="s-ict"></span></div></div>
+    <div class="stat"><div class="v" id="s-to">&mdash;</div><div class="k">Turnover</div><div class="sub">annual, two-way</div></div>
+  </div>
+</section>
+
+<!-- ============================ AUDIT ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part one &middot; What the existing model gets wrong</div>
+    <h2>Four structural problems, none of them sloppiness</h2>
+    <p>NebulaQuant is better engineered than most retail quant repos. It has genuine
+    purged walk-forward splits, ATR-scaled triple-barrier labels, and L&oacute;pez de
+    Prado uniqueness weights &mdash; the author clearly knows the literature. The
+    failures are architectural, which is why more tuning was never going to fix them.
+    The config file records the outcome plainly: the ML theses "failed the edge gate"
+    and the project pivoted to a rules-based momentum screen.</p>
+  </div>
+
+  <div class="col">
+    <div class="finding">
+      <div class="fnum">01</div>
+      <div>
+        <h3>Raw price levels are fed to the model <span class="chip no">Leakage-adjacent</span></h3>
+        <p><code>feature_columns()</code> returns every column not on a deny-list, which
+        sweeps in <code>sma_20</code>, <code>sma_50</code>, <code>sma_200</code>,
+        <code>atr_14</code>, <code>macd</code>, <code>macd_signal</code>,
+        <code>vol_ma_20</code> and <code>dollar_volume</code> &mdash; all in raw dollars.</p>
+        <p>This is not future leakage, which is why it survives a purged split. It is
+        worse in a subtle way: <code>sma_200&nbsp;&isin;&nbsp;[310,&nbsp;315]</code> is a
+        near-unique fingerprint for one name in one era. A gradient-boosted tree will
+        happily learn name-and-era-specific rules that carry zero forward information,
+        and those rules expire silently as prices drift. Every feature in the
+        replacement is a within-date cross-sectional rank, which cannot be memorised
+        this way.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="fnum">02</div>
+      <div>
+        <h3>The target is absolute, so the model predicts the market <span class="chip no">Root cause</span></h3>
+        <p><code>tb_label</code> asks whether a long entered tomorrow hits a
+        2&times;ATR profit target before a 1&times;ATR stop. That outcome is dominated
+        by market direction: across 76 correlated large caps, mean pairwise return
+        correlation in this sample is <b>0.267</b>. Most of the variance the model can
+        explain is beta.</p>
+        <p>So the model learned to be a market timer wearing a stock-picker's clothes.
+        That is exactly what the pivot to "regime-gated momentum" &mdash; SPY above its
+        200-day average, VIX below its 85th percentile &mdash; formalised. Residualising
+        returns first drops that correlation to <b>&minus;0.011</b>, which is what makes
+        genuine cross-sectional selection possible.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="fnum">03</div>
+      <div>
+        <h3>Three positions is not enough bets to measure skill <span class="chip no">Fatal for inference</span></h3>
+        <p><code>execution.target_positions: 3</code> with a 20-day hold gives roughly
+        13 independent bets per year. The fundamental law of active management puts
+        information ratio at IC&nbsp;&times;&nbsp;&radic;breadth; at that breadth, an
+        annual result is essentially a coin-flip sequence. You cannot distinguish a
+        good model from a lucky quarter, in either direction.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="fnum">04</div>
+      <div>
+        <h3>Hyperparameters are selected on the reported folds <span class="chip mid">Inflates results</span></h3>
+        <p><code>optimize.py</code> runs 20 Optuna trials scored on the median Sharpe
+        <em>across the walk-forward test folds</em>, tuning depth, learning rate,
+        probability threshold and both barrier multiples. Once a fold has been used to
+        choose a configuration it is in-sample. Only the 15% holdout stays clean, and at
+        roughly 440 days that is far too small to carry a 20-trial search. The
+        replacement fixes hyperparameters <em>a priori</em> and never tunes them.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="note warn">
+      <span class="lbl">A bias worth naming out loud</span>
+      The universe is 76 tickers chosen in 2026 because they are today's liquid large
+      caps. Every one of them survived and most thrived over the sample. For a
+      <em>long-only</em> backtest that is close to disqualifying. For the
+      cross-sectional market-neutral strategy studied here the distortion is much
+      smaller &mdash; the book is long and short inside the same survivor set &mdash;
+      but it is not zero, and no result below should be read as free of it.
+    </div>
+  </div>
+</section>
+
+<!-- ============================ THESIS ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part two &middot; Where an edge could plausibly come from</div>
+    <h2>Four published results, and what each one demands you build</h2>
+    <p>Short-horizon reversal is the natural candidate for a 2&ndash;10 day equity
+    strategy: it has a mechanism rather than just a backtest. You are paid for
+    supplying liquidity to someone who needs to trade now. But the literature is
+    equally clear that the naive version is untradeable, and each paper points at a
+    specific construction requirement.</p>
+  </div>
+
+  <div class="col">
+    <div class="finding">
+      <div class="fnum">A</div>
+      <div>
+        <h3>Naive reversal dies on costs &mdash; so restrict the universe</h3>
+        <p>Novy-Marx &amp; Velikov price 23 anomalies with Hasbrouck effective spreads.
+        Short-term reversal goes from <b>+0.37%/month gross</b> to
+        <b>&minus;1.28%/month net (t&nbsp;=&nbsp;&minus;6.02)</b>. Industry-relative
+        reversal: +0.98% gross, &minus;0.80% net. Their universe is all of CRSP, where
+        the microcaps that generate most of the gross return carry enormous spreads.
+        In mega caps, spreads are one to three basis points &mdash; roughly thirty times
+        cheaper. The anomaly is measured where it cannot be traded and traded where it
+        is not measured.</p>
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fnum">B</div>
+      <div>
+        <h3>Reversal mixes a winning leg with a losing one &mdash; so residualise</h3>
+        <p>Da, Liu &amp; Schaumburg decompose reversal profits: the across-industry
+        component is worth <b>&minus;0.295%/month (t&nbsp;=&nbsp;&minus;4.15)</b> while
+        the within-industry component is worth <b>+0.821%/month
+        (t&nbsp;=&nbsp;5.49)</b>. Sorting on the discount-rate-news residual instead of
+        raw returns lifts the three-factor alpha from 0.33% (t&nbsp;=&nbsp;1.37) to
+        <b>1.34% (t&nbsp;=&nbsp;9.28)</b>. Close-to-close reversal bolts a losing leg
+        onto a winning one.</p>
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fnum">C</div>
+      <div>
+        <h3>The payoff is conditional on stress &mdash; so give the model regime context</h3>
+        <p>Nagel shows normalised VIX predicts next-day reversal-strategy returns with a
+        coefficient of <b>0.22 (t&nbsp;&asymp;&nbsp;11)</b> and an adjusted R&sup2; of
+        0.07 daily, rising to <b>0.56 monthly</b> &mdash; extraordinary for a predictive
+        return regression. Liquidity provision is paid most when liquidity is scarce.</p>
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fnum">D</div>
+      <div>
+        <h3>Overnight and intraday returns carry opposite signs &mdash; so split them</h3>
+        <p>Lou, Polk &amp; Skouras find momentum accrues <em>entirely</em> overnight
+        (0.98%/month, t&nbsp;=&nbsp;3.84) and nothing intraday (&minus;0.02%,
+        t&nbsp;=&nbsp;&minus;0.06). Short-term reversal earns <b>+0.93% overnight</b>
+        and <b>&minus;1.05% intraday</b>. A close-to-close signal averages those two
+        into mush.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <p>The resulting design brief is specific: a large-cap universe where costs are
+    survivable, a signal defined on factor-residual returns, regime variables available
+    to the model as interaction context, an overnight/intraday decomposition, and
+    turnover control through overlapping tranches rather than a full daily rebalance.</p>
+  </div>
+</section>
+
+<!-- ============================ METHOD ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part three &middot; Method</div>
+    <h2>What was built, and what stops it cheating</h2>
+    <dl class="kv">
+      <dt>Universe</dt><dd>76 US large caps, 68&ndash;76 names per date, 2017-01 &rarr; 2026-08 (177,709 stock-days)</dd>
+      <dt>Risk model</dt><dd>Rolling equal-weight market factor + top-4 PCs of the market-residual covariance. Betas fit on a trailing 252 days, refit every 21 days, held fixed and applied forward.</dd>
+      <dt>Features</dt><dd>42 stock-level, each a within-date percentile rank; 8 date-level regime variables left raw as interaction context.</dd>
+      <dt>Target</dt><dd>Within-date rank of the forward 5-day <em>residual</em> return.</dd>
+      <dt>Model</dt><dd>LightGBM regression, 15 leaves, depth 4, L2 = 10, min_child_samples = 200. Averaged over 3 seeds. <b>Hyperparameters fixed a priori and never tuned.</b></dd>
+      <dt>Validation</dt><dd>Expanding walk-forward, 63-day OOS blocks, 3-year minimum train, purge = 5-day label horizon + 5-day embargo. 27 blocks, 1,666 OOS days.</dd>
+      <dt>Execution</dt><dd>Signal at the close of day t, fill at the close of t+1, returns earned t+2 &hellip; t+6. A full day of implementation lag.</dd>
+      <dt>Costs</dt><dd>2.5 bp one-way baseline plus 50 bp/yr borrow on short notional; sensitivity run from 0 to 20 bp.</dd>
+    </dl>
+    <p>Three checks were run before any model was fit. Data QA across all 77 raw files
+    found no NaN closes, no duplicate dates, no OHLC violations and no unadjusted
+    splits &mdash; the two flagged single-day moves above 35% (ORCL, SNOW) are real
+    earnings reactions. Open, high and low were rescaled onto the dividend-adjusted
+    basis; skipping that step injects a spurious &minus;0.5% overnight gap on every
+    ex-dividend date, which would have poisoned the overnight/intraday split. And the
+    factor model does what it claims: mean pairwise correlation falls from
+    <b>0.267</b> on raw returns to <b>&minus;0.011</b> on residuals.</p>
+  </div>
+</section>
+
+<!-- ============================ RAW SIGNALS ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part four &middot; What the raw signals say</div>
+    <h2>Reversal alone is weak. That is the expected answer.</h2>
+    <p>Before combining anything, each feature was tested on its own: daily
+    cross-sectional Spearman IC against the forward 5-day residual return, with
+    Newey-West standard errors at lag 10 to absorb the overlap in the labels.</p>
+  </div>
+
+  <div class="evidence">
+    <h3>Univariate information coefficients, 2017&ndash;2026</h3>
+    <p class="cap">Positive IC means the signal ranks winners correctly. Reversal
+    signals are stated so that positive = past losers outperform.</p>
+    <div class="tw"><table id="t-uni"><thead><tr>
+      <th>Signal</th><th>IC</th><th>NW t</th><th>IR</th><th>Hit rate</th>
+    </tr></thead><tbody></tbody></table></div>
+    <figcaption>Full table of all 42 signals in <span class="src">out/ic_full.csv</span>.
+    Reversal at 5 days reaches only t&nbsp;=&nbsp;1.61; at 1 day, t&nbsp;=&nbsp;1.89.</figcaption>
+  </div>
+
+  <div class="col">
+    <p>This matches the literature rather than contradicting it. Reversal is strongest
+    in small, illiquid names and has decayed substantially since decimalisation; in a
+    76-name mega-cap cross-section it should be marginal, and it is. Conditioning on
+    volatility helps in the predicted direction &mdash; 5-day reversal IC rises from
+    <b>0.0047</b> in the lowest VIX tercile to <b>0.0183</b> in the highest, roughly
+    Nagel's result &mdash; but not enough to carry a strategy alone.</p>
+    <p>The strongest single signal is 12-1 residual momentum (IC 0.0244,
+    t&nbsp;=&nbsp;3.53). Two apparently strong signals were tested for whether they are
+    alpha or artefact by splitting the IC series on the direction of the forward market
+    return. Reversal flips sign (+0.026 when the market rises, &minus;0.019 when it
+    falls); momentum does not (+0.025 / +0.023). Reversal in this universe carries
+    residual market exposure; momentum is closer to genuine selection.</p>
+    <div class="note">
+      <span class="lbl">The result that reframed the project</span>
+      Measured against forward <em>raw</em> returns instead of residual returns, almost
+      nothing survives: every reversal variant falls below t&nbsp;=&nbsp;1.0. A signal
+      can be strongly predictive in residual space and worth nothing in raw space. Which
+      space you trade in is therefore not a detail of implementation &mdash; it is the
+      strategy.
+    </div>
+  </div>
+</section>
+
+<!-- ============================ THE LADDER ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part five &middot; The central result</div>
+    <h2>Same signal, same costs, four ways to build the book</h2>
+    <p>The model is trained to predict returns orthogonal to a five-dimensional factor
+    space: market beta plus four principal components. A book that is merely dollar- and
+    beta-neutral still carries loadings on PC2 through PC4, and those loadings generate
+    variance an order of magnitude larger than the alpha. The forecast is drowned by
+    risk the forecast said nothing about.</p>
+    <p>The fix is to construct weights in the space the prediction lives in &mdash;
+    project the signal orthogonal to the point-in-time factor loadings, so the realised
+    P&amp;L <em>is</em> the residual return the model forecasts:</p>
+    <pre><code>w  &prop;  (I &minus; B (B'B)&#8315;&sup1; B') s</code></pre>
+  </div>
+
+  <div class="evidence">
+    <h3>Net Sharpe by neutralisation level</h3>
+    <p class="cap">Identical predictions, identical 2.5 bp costs, identical 5-day
+    overlapping tranches. The only thing that changes is which factors the portfolio is
+    neutral to.</p>
+    <svg id="c-ladder" class="chart" viewBox="0 0 760 210" role="img"
+         aria-label="Net Sharpe rises from minus 0.16 dollar-neutral to plus 0.74 when neutral to market beta and four principal components"></svg>
+    <figcaption>Bars show net Sharpe, with the Newey-West t-statistic beside each. Going from dollar-neutral to fully factor-neutral is worth
+    <b>0.89 Sharpe points</b> &mdash; more than any feature, any model choice, or any
+    hyperparameter in this study.</figcaption>
+  </div>
+
+  <div class="col">
+    <p>This is the direct answer to why the original model failed. It predicted
+    per-stock absolute outcomes and traded an unhedged long-only book, so its forecasts
+    and its risk lived in different spaces. No amount of feature engineering closes that
+    gap; only construction does.</p>
+  </div>
+</section>
+
+<!-- ============================ PERFORMANCE ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part six &middot; Out-of-sample performance</div>
+    <h2>What it actually earns</h2>
+    <p>Every point below is out-of-sample: produced by a model that saw only data
+    ending at least ten trading days before the prediction date.</p>
+  </div>
+
+  <div class="evidence wide">
+    <h3>Cumulative net return, factor-neutral books</h3>
+    <p class="cap">All series use identical construction and costs. Only the ranking
+    signal differs.</p>
+    <div class="legend" id="l-eq"></div>
+    <svg id="c-eq" class="chart" viewBox="0 0 900 320" role="img"
+         aria-label="Cumulative return of the ML model against single-signal baselines"></svg>
+    <figcaption>The model and residual momentum end the period at a similar level, but
+    the model gets there on a visibly smoother path &mdash; 4.2% volatility against
+    5.4%, and a &minus;5.1% worst drawdown against &minus;8.3%. That is where the Sharpe
+    difference lives (0.74 vs 0.62), not in total return. Reversal on its own is
+    roughly flat after costs despite a gross Sharpe near 0.40: turnover of 67&times; a
+    year consumes it, the Novy-Marx &amp; Velikov result reproduced in miniature.</figcaption>
+  </div>
+
+  <div class="evidence">
+    <h3>Year by year</h3>
+    <div class="tw"><table id="t-year"><thead><tr>
+      <th>Year</th><th>Net return</th><th>Sharpe</th><th>OOS IC</th>
+    </tr></thead><tbody></tbody></table></div>
+    <figcaption>Five of seven years positive. 2026 is a partial year (160 days).</figcaption>
+  </div>
+
+  <div class="evidence">
+    <h3>Where the edge breaks even on costs</h3>
+    <p class="cap">Round-trip cost is roughly twice the one-way figure on the x-axis.</p>
+    <div class="legend" id="l-cost"></div>
+    <svg id="c-cost" class="chart" viewBox="0 0 760 300" role="img"
+         aria-label="Sharpe declines with trading cost, crossing zero near ten basis points"></svg>
+    <figcaption>Break-even sits near <b>10 bp one-way</b> in the primary universe and
+    <b>9 bp</b> in the validation universe. Mega-cap half-spreads are 1&ndash;3 bp, so
+    the strategy has roughly a 3&ndash;4&times; margin over realistic retail execution
+    &mdash; but that margin is the whole business, and it disappears entirely for
+    anyone paying 20 bp.</figcaption>
+  </div>
+
+  <div class="evidence">
+    <h3>Rolling 12-month Sharpe</h3>
+    <svg id="c-roll" class="chart" viewBox="0 0 900 240" role="img"
+         aria-label="Rolling twelve month Sharpe ratio of the model, mostly positive with drawdown periods"></svg>
+    <figcaption>Positive in most windows, with sustained flat stretches through 2021 and
+    2024. An investor would have waited more than a year for payoff twice in six years.</figcaption>
+  </div>
+</section>
+
+<!-- ============================ REPLICATION ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part seven &middot; Independent replication</div>
+    <h2>It holds on a different universe in a different decade
+      <span class="chip ok" style="font-size:.6rem;vertical-align:.35em">Replicates</span></h2>
+    <p>The single most persuasive test available without new data: rebuild the entire
+    pipeline &mdash; factor model, features, labels, walk-forward, portfolio &mdash; on
+    482 S&amp;P 500 names over 2015&ndash;2018, a universe 6.3&times; wider and a period
+    that barely overlaps the primary sample's out-of-sample window (2020&ndash;2026).
+    Nothing was re-tuned.</p>
+  </div>
+
+  <div class="evidence">
+    <h3>Primary vs validation universe</h3>
+    <div class="tw"><table><thead><tr>
+      <th>Measure</th><th>Primary (76 names)</th><th>Validation (482 names)</th>
+    </tr></thead><tbody>
+      <tr><td>Out-of-sample period</td><td>2020-01 &rarr; 2026-08</td><td>2016-02 &rarr; 2018-01</td></tr>
+      <tr><td>OOS stock-days</td><td>124,264</td><td>219,223</td></tr>
+      <tr class="hl"><td>OOS IC</td><td>+0.0240</td><td>+0.0255</td></tr>
+      <tr class="hl"><td>IC Newey-West t</td><td>+3.86</td><td>+4.11</td></tr>
+      <tr><td>IC information ratio</td><td>+0.167</td><td>+0.309</td></tr>
+      <tr><td>Daily IC hit rate</td><td>57.1%</td><td>62.3%</td></tr>
+      <tr><td>Net Sharpe @ 2.5 bp</td><td>+0.74</td><td>+1.22</td></tr>
+      <tr><td>Annual vol</td><td>4.18%</td><td>1.90%</td></tr>
+    </tbody></table></div>
+    <figcaption>The validation book's volatility is less than half the primary's for the
+    same signal quality. That is breadth doing exactly what theory says it should:
+    482 names diversify idiosyncratic risk that 76 cannot.</figcaption>
+  </div>
+
+  <div class="col">
+    <p>The broad universe also recovers the reversal effect that the mega-cap universe
+    could not resolve. In 482 names, 1-day reversal reaches <b>t&nbsp;=&nbsp;2.61</b>,
+    5-day <b>t&nbsp;=&nbsp;2.25</b> and vol-scaled 5-day <b>t&nbsp;=&nbsp;2.20</b>,
+    against roughly 1.6&ndash;1.9 in the 76-name set. Reversal is a small- and mid-cap
+    phenomenon that thins out in mega caps &mdash; which is both a confirmation of the
+    literature and the clearest single instruction for what to do next.</p>
+    <div class="note warn">
+      <span class="lbl">Caveats on the validation data</span>
+      The 482-name file carries no dividend adjustment, so its overnight component is
+      contaminated on ex-dividend dates, and its membership is S&amp;P 500 as of 2018,
+      so it is survivorship-biased in the same direction as the primary set. It is a
+      genuine independent test of <em>breadth and period</em>, not of survivorship.
+    </div>
+  </div>
+</section>
+
+<!-- ============================ HONESTY ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part eight &middot; Trying to kill it</div>
+    <h2>Five tests designed to make the result go away</h2>
+  </div>
+
+  <div class="evidence">
+    <h3>1. Null distributions</h3>
+    <p class="cap">40 draws each. The permutation null shuffles the model's own
+    predictions across tickers within each date, preserving every distributional
+    property of the signal and destroying only its alignment with returns.</p>
+    <svg id="c-null" class="chart" viewBox="0 0 760 250" role="img"
+         aria-label="Histogram of null Sharpe ratios with the model far in the right tail"></svg>
+    <figcaption>Cost-matched, the model is outside the whole permutation null: 0 of 40
+    draws reached +0.738 (best draw +0.226). The i.i.d. null is drawn at
+    <em>zero</em> cost, so the like-for-like comparison is against the model's own
+    zero-cost Sharpe of <b>0.984</b>, which also beats all 40 draws (best +0.735). Worth
+    seeing plainly on the chart: that best cost-free random draw lands within a
+    rounding error of the model's <em>costed</em> result. Trading noise expensively is
+    what makes the orange distribution sit so far left, and a lucky random book at zero
+    cost is not a low bar.</figcaption>
+  </div>
+
+  <div class="evidence">
+    <h3>2. Deflated Sharpe ratio <span class="chip mid">0.918</span></h3>
+    <p class="cap">Bailey &amp; L&oacute;pez de Prado's correction for the fact that an
+    observed Sharpe is the maximum of many trials.</p>
+    <p>Charging honestly for <b>33 configurations</b> examined across this study
+    (15 hold-period &times; weight-cap combinations, 8 candidate signals, 6 cost levels,
+    4 neutralisation variants), the probability that the true Sharpe exceeds zero is
+    <b>0.918</b>. That is suggestive, not conclusive &mdash; it falls short of the
+    conventional 0.95 bar. Reported as-is rather than by quietly lowering the trial
+    count.</p>
+  </div>
+
+  <div class="evidence">
+    <h3>3. Probability of backtest overfitting <span class="chip mid">PBO = 0.690</span></h3>
+    <p class="cap">Combinatorially symmetric cross-validation over 15 configurations,
+    10 time blocks.</p>
+    <p>PBO above 0.5 nominally means "the selection procedure is worse than random." The
+    honest reading here is narrower, and the reason is visible in the numbers: all 15
+    configurations produce Sharpes between <b>+0.518 and +0.779</b>. When every variant
+    performs about equally well, <em>which one ranks first in any given sample is close
+    to arbitrary</em>, and PBO climbs toward 0.5 and beyond by construction.</p>
+    <p>So this statistic says <b>do not bother optimising the holding period or the
+    weight cap</b> &mdash; there is nothing to gain and the apparent gains will not
+    persist. It does not say the strategy is spurious; a spurious strategy would show a
+    wide config spread with some variants negative. Every configuration tested is
+    positive.</p>
+  </div>
+
+  <div class="evidence">
+    <h3>4. Subperiod stability</h3>
+    <div class="tw"><table><thead><tr>
+      <th>Segment</th><th>Net Sharpe</th><th>Annual</th><th>NW t</th><th>Days</th>
+    </tr></thead><tbody>
+      <tr><td>First half (2020-01 &rarr; 2023-05)</td><td class="pos">+0.934</td><td class="pos">+3.93%</td><td>+1.80</td><td>833</td></tr>
+      <tr><td>Second half (2023-05 &rarr; 2026-08)</td><td class="pos">+0.540</td><td class="pos">+2.25%</td><td>+1.24</td><td>833</td></tr>
+    </tbody></table></div>
+    <figcaption>Both halves positive; neither is individually significant. The second
+    half is weaker, consistent with the well-documented post-publication decay of
+    liquidity-provision premia &mdash; or with ordinary noise. Six years cannot separate
+    the two.</figcaption>
+  </div>
+
+  <div class="evidence">
+    <h3>5. Feature-block ablation</h3>
+    <p class="cap">Each block removed in turn, the full walk-forward re-run from scratch.</p>
+    <svg id="c-abl" class="chart" viewBox="0 0 760 300" role="img"
+         aria-label="Change in net Sharpe when each feature block is removed"></svg>
+    <figcaption>Bars show the change in net Sharpe when a block is dropped; negative
+    means the block was carrying weight.</figcaption>
+  </div>
+
+  <div class="col">
+    <p>Momentum is load-bearing: removing it costs <b>0.40 Sharpe points</b>, more than
+    everything else combined. Regime context is worth <b>0.09</b>, confirming that the
+    conditional structure Nagel documents is real and that the model is exploiting it.
+    Reversal, liquidity and the overnight/intraday split each contribute a modest
+    0.03&ndash;0.04.</p>
+    <p>The risk/volatility block is <em>negative</em>: dropping its ten features raises
+    net Sharpe from 0.739 to <b>0.823</b>. Those features are slow-moving cross-sectional
+    tilts &mdash; beta, idiosyncratic volatility, skew, kurtosis &mdash; that mostly
+    duplicate exposures the portfolio construction already neutralises, so they add
+    estimation noise without adding information.</p>
+    <div class="note warn">
+      <span class="lbl">Do not bank the 0.823</span>
+      Acting on that ablation is itself a selection decision made after seeing
+      out-of-sample results. The pre-registered full model scores <b>0.739</b> and that
+      is the number to plan against. The lean variant is a hypothesis for the next
+      independent test, not a free upgrade.
+    </div>
+  </div>
+</section>
+
+<!-- ============================ LIMITS ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part nine &middot; What this is not</div>
+    <h2>The honest ledger</h2>
+    <p>A 0.74 Sharpe market-neutral strategy earning 3.1% a year on 4.2% volatility is a
+    real but modest result. Here is everything that should temper it.</p>
+
+    <h3>It needs leverage to matter</h3>
+    <p>Unlevered, this returns 3.1% a year &mdash; below cash for much of the sample.
+    Getting to a 10% return needs roughly 3&times; gross leverage, which means a margin
+    account, financing costs that the 50 bp/yr borrow assumption only partly captures,
+    and the discipline to hold through a 15% levered drawdown.</p>
+
+    <h3>It is operationally heavy for a retail account</h3>
+    <p>The book carries <b>57 positions above 0.5%</b> with 0.89 gross exposure and
+    turns over 40&times; a year. That is roughly 20 trades a day, long and short, with
+    fractional shares and a short locate on every name. This is not a strategy you run
+    by hand.</p>
+
+    <h3>The statistical case is suggestive, not settled</h3>
+    <p>t&nbsp;=&nbsp;2.18 over 1,666 days. Deflated Sharpe 0.918, below the 0.95 bar.
+    Neither subperiod is individually significant. The replication is what carries the
+    most weight here &mdash; two independent universes agreeing on IC to within 0.0015
+    is harder to produce by chance than either result alone &mdash; but this is evidence
+    for a small edge, not proof of a large one.</p>
+
+    <h3>Survivorship bias is present in both samples</h3>
+    <p>Both universes are defined by present-day membership. The market-neutral
+    construction mutes this substantially but does not remove it. A point-in-time
+    constituent file with delisted names is the single highest-value data purchase
+    available, and until it exists every number here has an unquantified upward tilt.</p>
+
+    <h3>The 5-day horizon has no dividend or corporate-action model</h3>
+    <p>Prices are total-return adjusted, but earnings dates, index adds and deletes,
+    secondary offerings and M&amp;A are unmodelled. At a 5-day horizon these are the
+    events most likely to produce the large adverse residuals the model cannot see
+    coming.</p>
+  </div>
+</section>
+
+<!-- ============================ NEXT ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Part ten &middot; What to do next</div>
+    <h2>Ranked by expected value per hour spent</h2>
+
+    <div class="finding">
+      <div class="fnum">01</div>
+      <div>
+        <h3>Widen the universe to 400&ndash;500 names</h3>
+        <p>The highest-return change available, and the evidence is already in hand: the
+        same pipeline on 482 names produced <em>less than half</em> the volatility for
+        the same IC, and lifted net Sharpe from 0.74 to 1.22. Breadth is the one lever
+        here with a theoretical guarantee behind it. It also moves the book toward the
+        mid-cap names where reversal actually lives.</p>
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fnum">02</div>
+      <div>
+        <h3>Buy point-in-time data with delisted names</h3>
+        <p>Sharadar or Norgate, roughly $50&ndash;100/month. This is the only way to
+        remove the one bias that no modelling choice can correct, and it converts every
+        result in this note from "suggestive" to "measured."</p>
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fnum">03</div>
+      <div>
+        <h3>Test the lean feature set out-of-sample</h3>
+        <p>The ablation says the risk/volatility block hurts. Confirm or reject that on
+        the wider universe before adopting it &mdash; and register the decision before
+        looking, so it is a test rather than another selection.</p>
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fnum">04</div>
+      <div>
+        <h3>Paper-trade for a quarter, and track IC rather than P&amp;L</h3>
+        <p>Sixty days of P&amp;L on a 0.74 Sharpe strategy tells you nothing &mdash; the
+        noise dwarfs the signal. Daily cross-sectional IC converges far faster. If live
+        IC runs materially below 0.024, the difference is implementation, not the model:
+        check fill prices against the assumed close, and turnover against the assumed
+        40&times;.</p>
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fnum">05</div>
+      <div>
+        <h3>Do not optimise the holding period or the weight cap</h3>
+        <p>PBO of 0.69 across a config spread of 0.518&ndash;0.779 is a direct
+        instruction. Every configuration works about equally well; picking the best one
+        is fitting noise. Leave them at 5 days and 8%.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ CODE ============================ -->
+<section>
+  <div class="col">
+    <div class="eyebrow">Appendix &middot; Running it</div>
+    <h2>The pipeline</h2>
+    <p>Delivered into <code>nebulaquant-volatility-ai/research/</code>, alongside the
+    existing project rather than replacing it. Six modules, each independently runnable.</p>
+    <pre><code>src/panel.py      load raw OHLCV, rescale OHL onto the total-return
+                  basis, run data-integrity QA
+src/factors.py    rolling point-in-time market + PCA risk model;
+                  emits residual returns, betas and PC loadings
+src/features.py   42 cross-sectionally ranked stock features,
+                  8 raw regime features, rank targets
+src/model.py      purged + embargoed expanding walk-forward;
+                  fixed hyperparameters, multi-seed averaged
+src/portfolio.py  factor-neutral weight construction and
+                  vectorised overlapping tranches
+src/stats.py      Newey-West t-stats, deflated Sharpe, PBO/CSCV
+
+python3 build_dataset.py    # panel -> residuals -> features
+python3 train_wf.py         # walk-forward, reports OOS IC
+python3 run_backtest2.py    # costed portfolio + baselines
+python3 robustness.py       # nulls, DSR, PBO, subperiods
+python3 run_val.py          # independent 482-name replication
+python3 ablation.py         # leave-one-block-out</code></pre>
+    <p>The two pieces most worth reading are <code>src/portfolio.py</code>, which
+    contains the projection that makes the whole thing work, and
+    <code>src/stats.py</code>, which contains the tests that try to prove it doesn't.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="col">
+    <p>Sources: Nagel, <em>Evaporating Liquidity</em> (NBER w17653) &middot; Novy-Marx
+    &amp; Velikov, <em>A Taxonomy of Anomalies and Their Trading Costs</em> (NBER w20721)
+    &middot; Da, Liu &amp; Schaumburg, <em>Decomposing Short-Term Return Reversal</em>
+    (NY Fed SR513) &middot; Lou, Polk &amp; Skouras, <em>A Tug of War</em> (JFE 2019)
+    &middot; Bailey &amp; L&oacute;pez de Prado on the deflated Sharpe ratio and CSCV.</p>
+    <p>Research note, not investment advice. Every figure is a backtest on
+    survivorship-biased data; realised results will differ.</p>
+  </div>
+</footer>
+
+</div>
+
+<script>window.__DATA__ = {"ladder": [{"label": "Dollar-neutral only", "sharpe": -0.156, "ann": -0.0093, "t": -0.34}, {"label": "+ market beta", "sharpe": 0.46, "ann": 0.0225, "t": 1.37}, {"label": "+ 2 PCs", "sharpe": 0.674, "ann": 0.0293, "t": 1.98}, {"label": "+ 4 PCs (full)", "sharpe": 0.738, "ann": 0.0309, "t": 2.18}], "equity": {"dates": ["2020-01-06", "2020-01-10", "2020-01-16", "2020-01-23", "2020-01-29", "2020-02-04", "2020-02-10", "2020-02-14", "2020-02-21", "2020-02-27", "2020-03-04", "2020-03-10", "2020-03-16", "2020-03-20", "2020-03-26", "2020-04-01", "2020-04-07", "2020-04-14", "2020-04-20", "2020-04-24", "2020-04-30", "2020-05-06", "2020-05-12", "2020-05-18", "2020-05-22", "2020-05-29", "2020-06-04", "2020-06-10", "2020-06-16", "2020-06-22", "2020-06-26", "2020-07-02", "2020-07-09", "2020-07-15", "2020-07-21", "2020-07-27", "2020-07-31", "2020-08-06", "2020-08-12", "2020-08-18", "2020-08-24", "2020-08-28", "2020-09-03", "2020-09-10", "2020-09-16", "2020-09-22", "2020-09-28", "2020-10-02", "2020-10-08", "2020-10-14", "2020-10-20", "2020-10-26", "2020-10-30", "2020-11-05", "2020-11-11", "2020-11-17", "2020-11-23", "2020-11-30", "2020-12-04", "2020-12-10", "2020-12-16", "2020-12-22", "2020-12-29", "2021-01-05", "2021-01-11", "2021-01-15", "2021-01-22", "2021-01-28", "2021-02-03", "2021-02-09", "2021-02-16", "2021-02-22", "2021-02-26", "2021-03-04", "2021-03-10", "2021-03-16", "2021-03-22", "2021-03-26", "2021-04-01", "2021-04-08", "2021-04-14", "2021-04-20", "2021-04-26", "2021-04-30", "2021-05-06", "2021-05-12", "2021-05-18", "2021-05-24", "2021-05-28", "2021-06-04", "2021-06-10", "2021-06-16", "2021-06-22", "2021-06-28", "2021-07-02", "2021-07-09", "2021-07-15", "2021-07-21", "2021-07-27", "2021-08-02", "2021-08-06", "2021-08-12", "2021-08-18", "2021-08-24", "2021-08-30", "2021-09-03", "2021-09-10", "2021-09-16", "2021-09-22", "2021-09-28", "2021-10-04", "2021-10-08", "2021-10-14", "2021-10-20", "2021-10-26", "2021-11-01", "2021-11-05", "2021-11-11", "2021-11-17", "2021-11-23", "2021-11-30", "2021-12-06", "2021-12-10", "2021-12-16", "2021-12-22", "2021-12-29", "2022-01-04", "2022-01-10", "2022-01-14", "2022-01-21", "2022-01-27", "2022-02-02", "2022-02-08", "2022-02-14", "2022-02-18", "2022-02-25", "2022-03-03", "2022-03-09", "2022-03-15", "2022-03-21", "2022-03-25", "2022-03-31", "2022-04-06", "2022-04-12", "2022-04-19", "2022-04-25", "2022-04-29", "2022-05-05", "2022-05-11", "2022-05-17", "2022-05-23", "2022-05-27", "2022-06-03", "2022-06-09", "2022-06-15", "2022-06-22", "2022-06-28", "2022-07-05", "2022-07-11", "2022-07-15", "2022-07-21", "2022-07-27", "2022-08-02", "2022-08-08", "2022-08-12", "2022-08-18", "2022-08-24", "2022-08-30", "2022-09-06", "2022-09-12", "2022-09-16", "2022-09-22", "2022-09-28", "2022-10-04", "2022-10-10", "2022-10-14", "2022-10-20", "2022-10-26", "2022-11-01", "2022-11-07", "2022-11-11", "2022-11-17", "2022-11-23", "2022-11-30", "2022-12-06", "2022-12-12", "2022-12-16", "2022-12-22", "2022-12-29", "2023-01-05", "2023-01-11", "2023-01-18", "2023-01-24", "2023-01-30", "2023-02-03", "2023-02-09", "2023-02-15", "2023-02-22", "2023-02-28", "2023-03-06", "2023-03-10", "2023-03-16", "2023-03-22", "2023-03-28", "2023-04-03", "2023-04-10", "2023-04-14", "2023-04-20", "2023-04-26", "2023-05-02", "2023-05-08", "2023-05-12", "2023-05-18", "2023-05-24", "2023-05-31", "2023-06-06", "2023-06-12", "2023-06-16", "2023-06-23", "2023-06-29", "2023-07-06", "2023-07-12", "2023-07-18", "2023-07-24", "2023-07-28", "2023-08-03", "2023-08-09", "2023-08-15", "2023-08-21", "2023-08-25", "2023-08-31", "2023-09-07", "2023-09-13", "2023-09-19", "2023-09-25", "2023-09-29", "2023-10-05", "2023-10-11", "2023-10-17", "2023-10-23", "2023-10-27", "2023-11-02", "2023-11-08", "2023-11-14", "2023-11-20", "2023-11-27", "2023-12-01", "2023-12-07", "2023-12-13", "2023-12-19", "2023-12-26", "2024-01-02", "2024-01-08", "2024-01-12", "2024-01-19", "2024-01-25", "2024-01-31", "2024-02-06", "2024-02-12", "2024-02-16", "2024-02-23", "2024-02-29", "2024-03-06", "2024-03-12", "2024-03-18", "2024-03-22", "2024-03-28", "2024-04-04", "2024-04-10", "2024-04-16", "2024-04-22", "2024-04-26", "2024-05-02", "2024-05-08", "2024-05-14", "2024-05-20", "2024-05-24", "2024-05-31", "2024-06-06", "2024-06-12", "2024-06-18", "2024-06-25", "2024-07-01", "2024-07-08", "2024-07-12", "2024-07-18", "2024-07-24", "2024-07-30", "2024-08-05", "2024-08-09", "2024-08-15", "2024-08-21", "2024-08-27", "2024-09-03", "2024-09-09", "2024-09-13", "2024-09-19", "2024-09-25", "2024-10-01", "2024-10-07", "2024-10-11", "2024-10-17", "2024-10-23", "2024-10-29", "2024-11-04", "2024-11-08", "2024-11-14", "2024-11-20", "2024-11-26", "2024-12-03", "2024-12-09", "2024-12-13", "2024-12-19", "2024-12-26", "2025-01-02", "2025-01-08", "2025-01-15", "2025-01-22", "2025-01-28", "2025-02-03", "2025-02-07", "2025-02-13", "2025-02-20", "2025-02-26", "2025-03-04", "2025-03-10", "2025-03-14", "2025-03-20", "2025-03-26", "2025-04-01", "2025-04-07", "2025-04-11", "2025-04-17", "2025-04-24", "2025-04-30", "2025-05-06", "2025-05-12", "2025-05-16", "2025-05-22", "2025-05-29", "2025-06-04", "2025-06-10", "2025-06-16", "2025-06-23", "2025-06-27", "2025-07-03", "2025-07-10", "2025-07-16", "2025-07-22", "2025-07-28", "2025-08-01", "2025-08-07", "2025-08-13", "2025-08-19", "2025-08-25", "2025-08-29", "2025-09-05", "2025-09-11", "2025-09-17", "2025-09-23", "2025-09-29", "2025-10-03", "2025-10-09", "2025-10-15", "2025-10-21", "2025-10-27", "2025-10-31", "2025-11-06", "2025-11-12", "2025-11-18", "2025-11-24", "2025-12-01", "2025-12-05", "2025-12-11", "2025-12-17", "2025-12-23", "2025-12-30", "2026-01-06", "2026-01-12", "2026-01-16", "2026-01-23", "2026-01-29", "2026-02-04", "2026-02-10", "2026-02-17", "2026-02-23", "2026-02-27", "2026-03-05", "2026-03-11", "2026-03-17", "2026-03-23", "2026-03-27", "2026-04-02", "2026-04-09", "2026-04-15", "2026-04-21", "2026-04-27", "2026-05-01", "2026-05-07", "2026-05-13", "2026-05-19", "2026-05-26", "2026-06-01", "2026-06-05", "2026-06-11", "2026-06-17", "2026-06-24", "2026-06-30", "2026-07-07", "2026-07-13", "2026-07-17", "2026-07-23", "2026-07-29", "2026-08-04", "2026-08-10", "2026-08-14", "2026-08-20"], "series": {"ML model": [1.0, 1.00043, 1.0041, 0.99817, 0.99072, 0.9965, 0.99249, 0.99783, 0.99512, 0.99258, 1.00141, 0.99905, 0.99654, 1.00514, 1.02951, 1.02298, 1.0318, 1.0363, 1.03296, 1.03099, 1.03503, 1.03233, 1.02919, 1.02928, 1.0214, 1.0246, 1.02707, 1.03091, 1.03413, 1.03605, 1.03164, 1.03205, 1.02907, 1.03174, 1.03333, 1.03388, 1.04114, 1.04732, 1.04571, 1.0528, 1.05098, 1.04166, 1.04228, 1.04332, 1.03673, 1.0452, 1.04783, 1.05649, 1.05794, 1.06252, 1.06723, 1.06901, 1.06376, 1.06681, 1.06763, 1.06842, 1.07555, 1.07569, 1.07758, 1.07578, 1.07065, 1.07281, 1.06428, 1.07176, 1.08869, 1.09158, 1.08041, 1.07068, 1.06961, 1.07333, 1.07406, 1.0868, 1.08497, 1.07837, 1.07869, 1.07638, 1.07532, 1.07825, 1.08087, 1.08413, 1.088, 1.08834, 1.09375, 1.09699, 1.10402, 1.1033, 1.10295, 1.10127, 1.1002, 1.10151, 1.09623, 1.09159, 1.09013, 1.09053, 1.09107, 1.09208, 1.09155, 1.09491, 1.09491, 1.09575, 1.09066, 1.08747, 1.08701, 1.08976, 1.09051, 1.09124, 1.08943, 1.08315, 1.08358, 1.07912, 1.07222, 1.0775, 1.07652, 1.08053, 1.08268, 1.0774, 1.06273, 1.06616, 1.06167, 1.0627, 1.06425, 1.06295, 1.06708, 1.06868, 1.0653, 1.06579, 1.06511, 1.06719, 1.06329, 1.07071, 1.07609, 1.07709, 1.07577, 1.07951, 1.0703, 1.08302, 1.09511, 1.0938, 1.09917, 1.10069, 1.10123, 1.10372, 1.10489, 1.11017, 1.10489, 1.12306, 1.13066, 1.13283, 1.1337, 1.13263, 1.13382, 1.13784, 1.13862, 1.14521, 1.14972, 1.15285, 1.1555, 1.14705, 1.14836, 1.13763, 1.13397, 1.13447, 1.14159, 1.13552, 1.12983, 1.1301, 1.13911, 1.13847, 1.13461, 1.13552, 1.13383, 1.13876, 1.13938, 1.13558, 1.13191, 1.13302, 1.13001, 1.12985, 1.11985, 1.12561, 1.12558, 1.12717, 1.12241, 1.12478, 1.12816, 1.12724, 1.12232, 1.11283, 1.10781, 1.10984, 1.11138, 1.11176, 1.10718, 1.09993, 1.10019, 1.10222, 1.10768, 1.11396, 1.1149, 1.11388, 1.11477, 1.11287, 1.11701, 1.12033, 1.12593, 1.129, 1.1286, 1.13266, 1.136, 1.12973, 1.13554, 1.13614, 1.13045, 1.13309, 1.12962, 1.13003, 1.1262, 1.13402, 1.14248, 1.13834, 1.14314, 1.14555, 1.14864, 1.14784, 1.14844, 1.15082, 1.14613, 1.14162, 1.14417, 1.14834, 1.15068, 1.14888, 1.14861, 1.1464, 1.15067, 1.15041, 1.1481, 1.14802, 1.14534, 1.15933, 1.15616, 1.15648, 1.1504, 1.14801, 1.15782, 1.15839, 1.15116, 1.14619, 1.14402, 1.13937, 1.14423, 1.1441, 1.1444, 1.14635, 1.14877, 1.14851, 1.14994, 1.15443, 1.14536, 1.13724, 1.14669, 1.14599, 1.14166, 1.15458, 1.15698, 1.15242, 1.14555, 1.14583, 1.14226, 1.13749, 1.14052, 1.1338, 1.1313, 1.1269, 1.12635, 1.12759, 1.12644, 1.12813, 1.13104, 1.12807, 1.12528, 1.12849, 1.13053, 1.12749, 1.13272, 1.12862, 1.13303, 1.11561, 1.12808, 1.13374, 1.13503, 1.14101, 1.14262, 1.14187, 1.13402, 1.14581, 1.14035, 1.14461, 1.14204, 1.14565, 1.15255, 1.15602, 1.15959, 1.14437, 1.14835, 1.15993, 1.15366, 1.15722, 1.14905, 1.14833, 1.15019, 1.14823, 1.15646, 1.15411, 1.15558, 1.15918, 1.15799, 1.15634, 1.15346, 1.15728, 1.1534, 1.16538, 1.16654, 1.16107, 1.16125, 1.1555, 1.16272, 1.1677, 1.17248, 1.17243, 1.17719, 1.16894, 1.1749, 1.17168, 1.17273, 1.15791, 1.15942, 1.15616, 1.15511, 1.16103, 1.15565, 1.15243, 1.15551, 1.16471, 1.16549, 1.16408, 1.16991, 1.17168, 1.16513, 1.16709, 1.17228, 1.17768, 1.1803, 1.18493, 1.18533, 1.18038, 1.18406, 1.20075, 1.19996, 1.20876, 1.21196, 1.20216, 1.19951, 1.2168, 1.21567, 1.21084, 1.2201, 1.22847, 1.23092, 1.22368, 1.22778, 1.22679, 1.22678, 1.23387, 1.24098, 1.25176, 1.24759, 1.25076, 1.2465, 1.24891, 1.24124, 1.24224, 1.23676, 1.23752, 1.24073, 1.24384, 1.24415, 1.22769, 1.23175, 1.23507, 1.23088, 1.23284, 1.23947, 1.23285, 1.22902, 1.22844, 1.22725, 1.22707, 1.22776, 1.22828, 1.23386, 1.22092, 1.21268, 1.21425, 1.2233, 1.22531, 1.21432, 1.2164, 1.22619, 1.22322, 1.2273, 1.23218, 1.225, 1.21481, 1.20626, 1.21863, 1.21979], "Residual momentum 12-1": [1.0, 1.00168, 1.00444, 1.00822, 1.00544, 1.00711, 1.00446, 1.00913, 1.00987, 0.99593, 1.00843, 1.02226, 1.03932, 1.02805, 1.01386, 1.02411, 1.01678, 1.02155, 1.02714, 1.02288, 1.00994, 1.01997, 1.01493, 1.01508, 1.00309, 1.00632, 0.99983, 1.00275, 1.00493, 1.00627, 1.00458, 1.00879, 1.01413, 1.0231, 1.01966, 1.01886, 1.01848, 1.01941, 1.02193, 1.03406, 1.04026, 1.03479, 1.03155, 1.03443, 1.03318, 1.03546, 1.04058, 1.04988, 1.04916, 1.05455, 1.06288, 1.0659, 1.067, 1.07204, 1.064, 1.0647, 1.06413, 1.06861, 1.06287, 1.0645, 1.0627, 1.06973, 1.0653, 1.0766, 1.09422, 1.09183, 1.0904, 1.08329, 1.08347, 1.08623, 1.08677, 1.08925, 1.07848, 1.07463, 1.06976, 1.06321, 1.06305, 1.05236, 1.05634, 1.0611, 1.06492, 1.0621, 1.06881, 1.07574, 1.08037, 1.07633, 1.06978, 1.07031, 1.07689, 1.07088, 1.06483, 1.05823, 1.05678, 1.06213, 1.06497, 1.06697, 1.06555, 1.07135, 1.07067, 1.07326, 1.0797, 1.08392, 1.08226, 1.08414, 1.08889, 1.08204, 1.07849, 1.07465, 1.06707, 1.05838, 1.04672, 1.05272, 1.05599, 1.06199, 1.06972, 1.07828, 1.07082, 1.0742, 1.07157, 1.07917, 1.08406, 1.07384, 1.07789, 1.07326, 1.06317, 1.06201, 1.05381, 1.04979, 1.0444, 1.04192, 1.05293, 1.05963, 1.06848, 1.06431, 1.06092, 1.06071, 1.07328, 1.08459, 1.08875, 1.09648, 1.09928, 1.09527, 1.10173, 1.10224, 1.09625, 1.09705, 1.11184, 1.10839, 1.10857, 1.10821, 1.10653, 1.11, 1.10353, 1.11571, 1.10476, 1.10228, 1.10554, 1.10046, 1.10414, 1.09225, 1.08197, 1.08503, 1.09981, 1.09485, 1.08744, 1.08707, 1.09767, 1.10142, 1.10091, 1.10085, 1.10888, 1.1117, 1.1135, 1.11266, 1.11773, 1.11112, 1.10621, 1.10116, 1.09627, 1.08929, 1.07467, 1.07862, 1.07188, 1.06897, 1.07104, 1.07301, 1.07368, 1.07499, 1.07491, 1.06053, 1.05666, 1.05493, 1.05273, 1.04386, 1.02988, 1.04316, 1.04343, 1.03652, 1.03809, 1.04509, 1.04945, 1.04423, 1.04603, 1.04625, 1.04805, 1.0418, 1.04539, 1.05581, 1.06152, 1.06534, 1.07497, 1.07806, 1.08023, 1.06626, 1.06894, 1.05939, 1.05534, 1.05901, 1.07232, 1.07581, 1.07864, 1.07745, 1.07692, 1.07066, 1.06937, 1.07451, 1.07818, 1.08676, 1.08505, 1.08896, 1.09713, 1.10077, 1.08839, 1.08664, 1.08718, 1.08755, 1.08604, 1.09386, 1.09041, 1.10029, 1.09843, 1.10994, 1.10649, 1.10753, 1.10211, 1.10014, 1.09059, 1.07913, 1.07876, 1.07447, 1.07789, 1.07406, 1.08142, 1.0922, 1.08943, 1.09615, 1.10292, 1.10858, 1.1059, 1.10625, 1.10245, 1.10884, 1.11828, 1.11918, 1.12191, 1.12917, 1.12244, 1.12343, 1.12426, 1.12269, 1.12889, 1.11349, 1.11267, 1.11634, 1.11243, 1.11021, 1.11997, 1.11843, 1.12081, 1.12564, 1.13604, 1.12576, 1.13037, 1.12616, 1.12096, 1.11463, 1.12095, 1.10558, 1.10673, 1.12956, 1.12135, 1.12194, 1.1306, 1.13888, 1.13997, 1.14397, 1.1437, 1.14165, 1.13296, 1.13788, 1.15378, 1.15259, 1.1547, 1.14076, 1.1337, 1.14106, 1.12474, 1.12907, 1.12966, 1.12775, 1.13171, 1.1432, 1.14844, 1.15711, 1.15449, 1.15224, 1.15806, 1.16168, 1.16156, 1.18063, 1.19616, 1.18829, 1.17707, 1.17563, 1.16818, 1.15408, 1.1663, 1.1643, 1.16923, 1.17917, 1.18369, 1.19205, 1.19596, 1.19687, 1.20315, 1.21015, 1.20078, 1.20048, 1.19729, 1.20876, 1.20774, 1.19043, 1.19359, 1.20534, 1.20048, 1.20013, 1.19202, 1.19592, 1.18807, 1.18698, 1.20684, 1.20776, 1.19567, 1.18594, 1.18637, 1.19053, 1.1921, 1.20341, 1.20281, 1.20408, 1.20914, 1.19563, 1.18757, 1.20508, 1.19293, 1.19144, 1.195, 1.209, 1.20936, 1.20447, 1.21108, 1.20769, 1.20154, 1.2085, 1.20019, 1.21503, 1.21163, 1.21652, 1.21555, 1.22419, 1.21168, 1.2371, 1.24742, 1.25884, 1.25431, 1.25612, 1.24601, 1.22693, 1.22836, 1.22851, 1.22957, 1.23442, 1.24591, 1.25557, 1.23354, 1.22885, 1.22178, 1.231, 1.22463, 1.22656, 1.23115, 1.22785, 1.22934, 1.24417, 1.24762, 1.25302, 1.26376, 1.26691, 1.26109, 1.26418, 1.25358, 1.25635, 1.2499, 1.24269, 1.24104, 1.24442, 1.23858], "Reversal 5d": [1.0, 1.0024, 1.00022, 0.99831, 1.00251, 1.00536, 0.99997, 1.00363, 1.00091, 1.00678, 1.00967, 0.99477, 0.96739, 0.95138, 1.02189, 1.03725, 1.05062, 1.06625, 1.06554, 1.06621, 1.07318, 1.06556, 1.05552, 1.05631, 1.054, 1.06907, 1.05426, 1.05565, 1.05795, 1.05358, 1.04713, 1.04862, 1.04267, 1.04213, 1.04688, 1.042, 1.03924, 1.03333, 1.03966, 1.03718, 1.03039, 1.02398, 1.02036, 1.01294, 1.01168, 1.01361, 1.01637, 1.01744, 1.01812, 1.02054, 1.01602, 1.01507, 1.01044, 1.00903, 1.01482, 1.0078, 0.99728, 0.99886, 1.00027, 0.99987, 1.00387, 0.99723, 1.00336, 1.01174, 1.01188, 1.00223, 1.01159, 1.01512, 1.01984, 1.01674, 1.015, 1.01624, 1.02292, 1.02102, 1.02004, 1.02768, 1.02766, 1.02663, 1.028, 1.02871, 1.03046, 1.02924, 1.02762, 1.03416, 1.02724, 1.02549, 1.02487, 1.02715, 1.02791, 1.03108, 1.03121, 1.02717, 1.02216, 1.02985, 1.03054, 1.03698, 1.03679, 1.03675, 1.0385, 1.03878, 1.03975, 1.03539, 1.03739, 1.03864, 1.0392, 1.03971, 1.03727, 1.03388, 1.02957, 1.02936, 1.01815, 1.0208, 1.02001, 1.01614, 1.00695, 1.00332, 0.99816, 0.99959, 0.99848, 1.00016, 0.99512, 1.00078, 0.99733, 0.99676, 0.99659, 0.99459, 0.9979, 1.00122, 0.99564, 0.99559, 0.99759, 1.00537, 0.9998, 1.00427, 1.00425, 1.00542, 1.00191, 0.99167, 0.99708, 1.00472, 1.00825, 1.00386, 0.99921, 1.00211, 1.00499, 0.99648, 1.00867, 1.0157, 1.01328, 1.00268, 0.99601, 1.00538, 1.00417, 1.00249, 1.00669, 1.01029, 1.01394, 1.00843, 1.0105, 1.00755, 1.01246, 1.00933, 1.00786, 1.00868, 1.00868, 1.00565, 1.00902, 1.01072, 1.00814, 1.01011, 1.00837, 1.00772, 1.00326, 1.00225, 0.99395, 0.99604, 0.99446, 0.99877, 0.99417, 0.99207, 0.9987, 1.00157, 1.0014, 0.99857, 0.99789, 0.99647, 0.99404, 0.9903, 0.98434, 0.98058, 0.98619, 0.98678, 0.98743, 0.98055, 0.98631, 0.98953, 0.99547, 1.00201, 0.99912, 0.99723, 0.99019, 0.98107, 0.98243, 0.98019, 0.9829, 0.98915, 0.99099, 0.997, 0.9989, 1.00246, 0.99812, 1.00404, 0.99322, 0.99304, 0.9716, 0.97257, 0.96297, 0.9645, 0.97152, 0.97754, 0.9783, 0.97998, 0.98156, 0.9825, 0.98703, 0.99156, 0.99135, 0.98919, 0.98665, 0.98526, 0.97845, 0.97601, 0.98119, 0.98235, 0.98325, 0.98613, 0.98479, 0.9846, 0.98282, 0.98822, 0.99112, 0.99138, 0.98902, 0.98955, 0.9925, 0.99135, 0.98682, 0.9822, 0.97661, 0.97936, 0.97674, 0.9801, 0.97277, 0.97057, 0.96566, 0.96954, 0.97714, 0.97223, 0.97244, 0.96108, 0.96591, 0.96441, 0.96171, 0.96425, 0.96729, 0.97026, 0.97067, 0.97096, 0.96747, 0.96817, 0.97134, 0.97522, 0.97606, 0.97796, 0.97888, 0.97515, 0.97429, 0.97419, 0.97328, 0.97158, 0.96636, 0.97911, 0.97909, 0.97516, 0.98011, 0.9787, 0.98421, 0.97464, 0.97068, 0.97362, 0.97348, 0.97759, 0.97568, 0.98232, 0.98363, 0.98523, 0.99322, 0.99082, 0.99226, 0.99597, 0.99988, 1.00267, 1.00435, 1.00995, 1.00973, 0.99355, 0.98862, 0.99183, 0.99201, 0.99529, 0.99395, 0.98161, 0.97947, 0.97786, 0.9782, 0.98361, 0.97864, 0.98689, 0.9917, 0.99481, 0.99784, 0.99394, 0.99148, 0.99089, 0.9863, 0.99352, 1.00224, 1.00004, 0.99955, 1.00021, 1.00213, 0.99475, 1.00357, 1.00518, 1.00401, 1.00144, 1.00421, 0.99765, 1.00207, 0.99987, 0.99878, 1.0071, 0.99844, 1.00808, 1.01037, 1.01263, 1.0152, 1.0136, 1.01881, 1.01901, 1.01954, 1.0203, 1.02096, 1.02468, 1.02354, 1.01778, 1.01874, 1.01773, 1.01299, 1.0123, 1.00614, 1.01839, 1.01241, 1.02274, 1.02785, 1.02363, 1.02514, 1.02094, 1.01671, 1.01352, 1.01992, 1.02682, 1.02611, 1.03147, 1.03348, 1.02936, 1.02924, 1.02904, 1.02464, 1.02451, 1.01616, 1.01739, 1.01876, 1.02166, 1.02021, 1.01447, 1.01066, 1.01443, 1.01493, 1.01598, 1.01545, 1.01442, 1.01584, 1.00569, 1.01166, 1.01495, 1.01264, 1.00388, 1.00883, 0.99902, 1.00877, 1.01174, 0.98885, 0.99717, 0.99866, 0.99371, 0.99155, 0.99257, 1.00893, 1.01482, 1.01256, 1.00334, 1.01295, 1.0237, 1.02061, 1.02471, 1.01359]}}, "rolling": {"dates": ["2021-01-04", "2021-01-08", "2021-01-14", "2021-01-21", "2021-01-27", "2021-02-02", "2021-02-08", "2021-02-12", "2021-02-19", "2021-02-25", "2021-03-03", "2021-03-09", "2021-03-15", "2021-03-19", "2021-03-25", "2021-03-31", "2021-04-07", "2021-04-13", "2021-04-19", "2021-04-23", "2021-04-29", "2021-05-05", "2021-05-11", "2021-05-17", "2021-05-21", "2021-05-27", "2021-06-03", "2021-06-09", "2021-06-15", "2021-06-21", "2021-06-25", "2021-07-01", "2021-07-08", "2021-07-14", "2021-07-20", "2021-07-26", "2021-07-30", "2021-08-05", "2021-08-11", "2021-08-17", "2021-08-23", "2021-08-27", "2021-09-02", "2021-09-09", "2021-09-15", "2021-09-21", "2021-09-27", "2021-10-01", "2021-10-07", "2021-10-13", "2021-10-19", "2021-10-25", "2021-10-29", "2021-11-04", "2021-11-10", "2021-11-16", "2021-11-22", "2021-11-29", "2021-12-03", "2021-12-09", "2021-12-15", "2021-12-21", "2021-12-28", "2022-01-03", "2022-01-07", "2022-01-13", "2022-01-20", "2022-01-26", "2022-02-01", "2022-02-07", "2022-02-11", "2022-02-17", "2022-02-24", "2022-03-02", "2022-03-08", "2022-03-14", "2022-03-18", "2022-03-24", "2022-03-30", "2022-04-05", "2022-04-11", "2022-04-18", "2022-04-22", "2022-04-28", "2022-05-04", "2022-05-10", "2022-05-16", "2022-05-20", "2022-05-26", "2022-06-02", "2022-06-08", "2022-06-14", "2022-06-21", "2022-06-27", "2022-07-01", "2022-07-08", "2022-07-14", "2022-07-20", "2022-07-26", "2022-08-01", "2022-08-05", "2022-08-11", "2022-08-17", "2022-08-23", "2022-08-29", "2022-09-02", "2022-09-09", "2022-09-15", "2022-09-21", "2022-09-27", "2022-10-03", "2022-10-07", "2022-10-13", "2022-10-19", "2022-10-25", "2022-10-31", "2022-11-04", "2022-11-10", "2022-11-16", "2022-11-22", "2022-11-29", "2022-12-05", "2022-12-09", "2022-12-15", "2022-12-21", "2022-12-28", "2023-01-04", "2023-01-10", "2023-01-17", "2023-01-23", "2023-01-27", "2023-02-02", "2023-02-08", "2023-02-14", "2023-02-21", "2023-02-27", "2023-03-03", "2023-03-09", "2023-03-15", "2023-03-21", "2023-03-27", "2023-03-31", "2023-04-06", "2023-04-13", "2023-04-19", "2023-04-25", "2023-05-01", "2023-05-05", "2023-05-11", "2023-05-17", "2023-05-23", "2023-05-30", "2023-06-05", "2023-06-09", "2023-06-15", "2023-06-22", "2023-06-28", "2023-07-05", "2023-07-11", "2023-07-17", "2023-07-21", "2023-07-27", "2023-08-02", "2023-08-08", "2023-08-14", "2023-08-18", "2023-08-24", "2023-08-30", "2023-09-06", "2023-09-12", "2023-09-18", "2023-09-22", "2023-09-28", "2023-10-04", "2023-10-10", "2023-10-16", "2023-10-20", "2023-10-26", "2023-11-01", "2023-11-07", "2023-11-13", "2023-11-17", "2023-11-24", "2023-11-30", "2023-12-06", "2023-12-12", "2023-12-18", "2023-12-22", "2023-12-29", "2024-01-05", "2024-01-11", "2024-01-18", "2024-01-24", "2024-01-30", "2024-02-05", "2024-02-09", "2024-02-15", "2024-02-22", "2024-02-28", "2024-03-05", "2024-03-11", "2024-03-15", "2024-03-21", "2024-03-27", "2024-04-03", "2024-04-09", "2024-04-15", "2024-04-19", "2024-04-25", "2024-05-01", "2024-05-07", "2024-05-13", "2024-05-17", "2024-05-23", "2024-05-30", "2024-06-05", "2024-06-11", "2024-06-17", "2024-06-24", "2024-06-28", "2024-07-05", "2024-07-11", "2024-07-17", "2024-07-23", "2024-07-29", "2024-08-02", "2024-08-08", "2024-08-14", "2024-08-20", "2024-08-26", "2024-08-30", "2024-09-06", "2024-09-12", "2024-09-18", "2024-09-24", "2024-09-30", "2024-10-04", "2024-10-10", "2024-10-16", "2024-10-22", "2024-10-28", "2024-11-01", "2024-11-07", "2024-11-13", "2024-11-19", "2024-11-25", "2024-12-02", "2024-12-06", "2024-12-12", "2024-12-18", "2024-12-24", "2024-12-31", "2025-01-07", "2025-01-14", "2025-01-21", "2025-01-27", "2025-01-31", "2025-02-06", "2025-02-12", "2025-02-19", "2025-02-25", "2025-03-03", "2025-03-07", "2025-03-13", "2025-03-19", "2025-03-25", "2025-03-31", "2025-04-04", "2025-04-10", "2025-04-16", "2025-04-23", "2025-04-29", "2025-05-05", "2025-05-09", "2025-05-15", "2025-05-21", "2025-05-28", "2025-06-03", "2025-06-09", "2025-06-13", "2025-06-20", "2025-06-26", "2025-07-02", "2025-07-09", "2025-07-15", "2025-07-21", "2025-07-25", "2025-07-31", "2025-08-06", "2025-08-12", "2025-08-18", "2025-08-22", "2025-08-28", "2025-09-04", "2025-09-10", "2025-09-16", "2025-09-22", "2025-09-26", "2025-10-02", "2025-10-08", "2025-10-14", "2025-10-20", "2025-10-24", "2025-10-30", "2025-11-05", "2025-11-11", "2025-11-17", "2025-11-21", "2025-11-28", "2025-12-04", "2025-12-10", "2025-12-16", "2025-12-22", "2025-12-29", "2026-01-05", "2026-01-09", "2026-01-15", "2026-01-22", "2026-01-28", "2026-02-03", "2026-02-09", "2026-02-13", "2026-02-20", "2026-02-26", "2026-03-04", "2026-03-10", "2026-03-16", "2026-03-20", "2026-03-26", "2026-04-01", "2026-04-08", "2026-04-14", "2026-04-20", "2026-04-24", "2026-04-30", "2026-05-06", "2026-05-12", "2026-05-18", "2026-05-22", "2026-05-29", "2026-06-04", "2026-06-10", "2026-06-16", "2026-06-23", "2026-06-29", "2026-07-06", "2026-07-10", "2026-07-16", "2026-07-22", "2026-07-28", "2026-08-03", "2026-08-07", "2026-08-13", "2026-08-19"], "values": [1.288, 1.546, 1.635, 1.424, 1.403, 1.479, 1.456, 1.365, 1.663, 1.652, 1.611, 1.486, 1.479, 1.345, 0.797, 1.196, 1.096, 0.984, 1.163, 1.251, 1.168, 1.556, 1.629, 1.645, 1.78, 1.72, 1.851, 1.474, 1.321, 1.113, 1.33, 1.362, 1.426, 1.416, 1.286, 1.367, 1.308, 1.027, 1.022, 0.913, 0.915, 1.165, 1.137, 1.007, 1.208, 1.005, 0.765, 0.593, 0.47, 0.471, 0.345, 0.379, 0.298, -0.033, -0.0, -0.05, -0.355, -0.149, -0.238, -0.374, -0.078, -0.095, 0.122, -0.064, -0.469, -0.809, -0.378, 0.159, -0.035, 0.084, 0.242, -0.313, -0.172, 0.297, 0.394, 0.516, 0.728, 0.834, 0.676, 0.588, 0.777, 0.641, 0.728, 1.043, 0.648, 0.708, 0.886, 0.899, 0.918, 0.874, 1.381, 1.492, 1.67, 1.745, 1.592, 1.481, 1.341, 1.163, 1.08, 1.03, 1.186, 1.099, 0.944, 1.207, 1.258, 1.067, 1.175, 1.026, 1.197, 1.367, 1.492, 1.19, 1.402, 1.233, 1.108, 0.9, 1.319, 1.43, 1.541, 1.472, 1.339, 1.438, 1.617, 1.297, 1.124, 0.907, 1.1, 1.089, 1.145, 1.002, 0.644, 0.652, 0.594, 0.578, 0.911, 0.857, 0.44, 0.536, 0.389, 0.409, 0.396, 0.448, 0.681, 0.464, 0.552, 0.436, -0.023, 0.2, 0.123, -0.144, -0.043, -0.06, -0.14, -0.499, -0.408, -0.252, -0.431, -0.146, -0.094, 0.169, 0.317, 0.449, 0.398, 0.261, 0.307, 0.389, 0.338, 0.197, 0.457, 0.282, 0.438, 0.422, 0.368, 0.386, 0.635, 0.28, 0.669, 0.668, 1.006, 0.752, 0.729, 0.786, 0.916, 0.816, 0.617, 0.523, 0.479, 0.786, 1.009, 0.954, 0.922, 0.976, 1.051, 1.451, 1.519, 1.191, 1.159, 0.619, 0.723, 0.653, 0.871, 1.062, 1.008, 0.731, 0.599, 0.289, 0.287, 0.191, -0.038, 0.105, 0.003, -0.277, -0.001, -0.078, -0.055, 0.011, 0.108, -0.166, -0.382, -0.194, -0.39, -0.191, -0.495, -0.413, -0.636, -0.48, -0.316, -0.194, -0.084, -0.202, -0.081, -0.319, -0.099, 0.024, -0.077, -0.18, -0.121, 0.099, 0.204, 0.092, -0.123, -0.079, 0.203, 0.13, 0.005, -0.107, 0.046, 0.083, 0.044, 0.302, 0.275, 0.241, 0.256, 0.246, 0.168, 0.15, 0.082, 0.013, 0.346, 0.47, 0.434, 0.454, 0.338, 0.36, 0.26, 0.371, 0.621, 0.638, 0.637, 0.665, 0.723, 0.944, 0.544, 0.405, 0.671, 0.616, 0.696, 0.632, 0.508, 0.508, 0.863, 0.955, 0.729, 1.002, 0.816, 0.973, 0.875, 1.139, 1.149, 1.09, 1.177, 1.061, 0.862, 0.945, 1.379, 1.14, 1.21, 1.355, 1.286, 1.209, 1.264, 1.364, 1.091, 1.585, 1.64, 1.452, 1.453, 1.513, 1.654, 1.569, 1.842, 1.976, 2.092, 2.019, 2.049, 1.817, 1.984, 1.849, 1.916, 1.687, 1.794, 1.723, 1.474, 1.87, 1.496, 1.651, 1.376, 1.241, 1.191, 1.397, 1.327, 1.138, 1.288, 1.12, 1.002, 1.422, 1.6, 1.597, 1.352, 1.059, 1.117, 1.459, 1.381, 1.146, 0.907, 1.127, 0.893, 0.947, 1.153, 1.092, 0.775, 0.515, 0.638, 0.604]}, "cost": {"bps": [0, 1, 2.5, 5, 7.5, 10, 15, 20], "primary": [0.984, 0.885, 0.738, 0.494, 0.252, 0.013, -0.459, -0.921], "validation": [1.715, 1.518, 1.224, 0.738, 0.256, -0.221, -1.161, -2.08]}, "ic_year_val": {"2016": 0.0222, "2017": 0.0286, "2018": 0.0166}, "null": {"perm": [-0.268, -0.221, -0.591, -0.322, -0.179, -0.098, -1.016, -0.081, -0.508, -0.129, -0.414, -0.305, -0.009, -1.089, -0.475, -0.132, -0.519, -0.96, -0.973, -0.149, 0.226, -0.646, -0.594, -0.777, -0.863, -0.374, -0.407, -0.505, -0.692, -0.145, -0.875, 0.091, -0.474, -0.688, -0.13, -0.357, 0.08, -1.236, -0.383, -0.803], "iid0": [0.302, -0.541, -0.638, -0.404, 0.219, -0.118, -0.495, -0.259, 0.311, 0.41, 0.187, -0.536, 0.569, 0.021, 0.2, -0.076, -0.094, -0.607, -0.421, 0.095, 0.16, -0.426, -0.304, -0.523, -0.183, -0.14, 0.052, 0.01, 0.163, 0.013, -0.035, -0.088, -0.217, -0.356, -0.144, 0.689, 0.291, 0.128, 0.258, 0.735], "model": 0.738}, "ic_year": {"2020": 0.0437, "2021": 0.0101, "2022": 0.01, "2023": 0.0227, "2024": 0.0237, "2025": 0.041, "2026": 0.0128}, "univariate": [{"signal": "mom_252_21", "ic_mean": 0.0244, "ic_t_nw": 3.2997, "ic_std": 0.183, "ic_ir": 0.1331, "hit_rate": 0.5607, "n_days": 2422}, {"signal": "rev_1", "ic_mean": 0.0065, "ic_t_nw": 1.8939, "ic_std": 0.1716, "ic_ir": 0.0376, "hit_rate": 0.5252, "n_days": 2422}, {"signal": "rev_1_sc", "ic_mean": 0.0063, "ic_t_nw": 1.8912, "ic_std": 0.1677, "ic_ir": 0.0377, "hit_rate": 0.5227, "n_days": 2422}, {"signal": "dist_52w_high", "ic_mean": 0.0126, "ic_t_nw": 1.83, "ic_std": 0.1749, "ic_ir": 0.0723, "hit_rate": 0.5438, "n_days": 2422}, {"signal": "rev_3", "ic_mean": 0.0081, "ic_t_nw": 1.6599, "ic_std": 0.1694, "ic_ir": 0.0476, "hit_rate": 0.5107, "n_days": 2422}, {"signal": "rev_5", "ic_mean": 0.0092, "ic_t_nw": 1.6064, "ic_std": 0.1696, "ic_ir": 0.054, "hit_rate": 0.5239, "n_days": 2422}, {"signal": "rev_5_sc", "ic_mean": 0.0088, "ic_t_nw": 1.5674, "ic_std": 0.1656, "ic_ir": 0.0529, "hit_rate": 0.5219, "n_days": 2422}, {"signal": "on_intra_spread_21", "ic_mean": 0.0084, "ic_t_nw": 1.4474, "ic_std": 0.146, "ic_ir": 0.0576, "hit_rate": 0.5194, "n_days": 2422}, {"signal": "mom_63", "ic_mean": 0.0099, "ic_t_nw": 1.3131, "ic_std": 0.1912, "ic_ir": 0.052, "hit_rate": 0.5285, "n_days": 2422}, {"signal": "rev_10_sc", "ic_mean": 0.0074, "ic_t_nw": 1.149, "ic_std": 0.1728, "ic_ir": 0.0428, "hit_rate": 0.5099, "n_days": 2422}, {"signal": "rev_10", "ic_mean": 0.0073, "ic_t_nw": 1.1328, "ic_std": 0.1752, "ic_ir": 0.0419, "hit_rate": 0.5066, "n_days": 2422}, {"signal": "on_intra_spread_5", "ic_mean": 0.0043, "ic_t_nw": 0.9482, "ic_std": 0.1425, "ic_ir": 0.03, "hit_rate": 0.5161, "n_days": 2422}, {"signal": "amihud_21", "ic_mean": 0.0047, "ic_t_nw": 0.8563, "ic_std": 0.137, "ic_ir": 0.0343, "hit_rate": 0.5033, "n_days": 2422}, {"signal": "semidev_21", "ic_mean": 0.0001, "ic_t_nw": 0.024, "ic_std": 0.1387, "ic_ir": 0.0009, "hit_rate": 0.4905, "n_days": 2422}, {"signal": "vol_shock", "ic_mean": 0.0, "ic_t_nw": 0.0098, "ic_std": 0.1303, "ic_ir": 0.0003, "hit_rate": 0.4884, "n_days": 2422}, {"signal": "dv_trend", "ic_mean": -0.0005, "ic_t_nw": -0.0958, "ic_std": 0.1371, "ic_ir": -0.0037, "hit_rate": 0.4955, "n_days": 2422}, {"signal": "mom_21", "ic_mean": -0.0015, "ic_t_nw": -0.205, "ic_std": 0.1843, "ic_ir": -0.008, "hit_rate": 0.5, "n_days": 2422}, {"signal": "dist_52w_low", "ic_mean": -0.0013, "ic_t_nw": -0.2078, "ic_std": 0.166, "ic_ir": -0.0081, "hit_rate": 0.5161, "n_days": 2422}, {"signal": "mom_21_sc", "ic_mean": -0.0017, "ic_t_nw": -0.2397, "ic_std": 0.1808, "ic_ir": -0.0093, "hit_rate": 0.5021, "n_days": 2422}, {"signal": "rsi_14", "ic_mean": -0.0017, "ic_t_nw": -0.2694, "ic_std": 0.1638, "ic_ir": -0.0102, "hit_rate": 0.5004, "n_days": 2422}, {"signal": "clv_5", "ic_mean": -0.002, "ic_t_nw": -0.4334, "ic_std": 0.1397, "ic_ir": -0.0144, "hit_rate": 0.4963, "n_days": 2422}, {"signal": "donch_pos_20", "ic_mean": -0.0031, "ic_t_nw": -0.5171, "ic_std": 0.1602, "ic_ir": -0.0192, "hit_rate": 0.4955, "n_days": 2422}, {"signal": "on_21", "ic_mean": -0.0033, "ic_t_nw": -0.5383, "ic_std": 0.1509, "ic_ir": -0.0218, "hit_rate": 0.4769, "n_days": 2422}, {"signal": "vol_dryup", "ic_mean": -0.0026, "ic_t_nw": -0.5521, "ic_std": 0.13, "ic_ir": -0.0199, "hit_rate": 0.493, "n_days": 2422}, {"signal": "intra_21", "ic_mean": -0.005, "ic_t_nw": -0.8027, "ic_std": 0.1593, "ic_ir": -0.0313, "hit_rate": 0.4913, "n_days": 2422}, {"signal": "updays_10", "ic_mean": -0.0047, "ic_t_nw": -0.876, "ic_std": 0.1521, "ic_ir": -0.0312, "hit_rate": 0.4942, "n_days": 2422}, {"signal": "max_abs_10", "ic_mean": -0.0049, "ic_t_nw": -1.0066, "ic_std": 0.126, "ic_ir": -0.0393, "hit_rate": 0.4913, "n_days": 2422}, {"signal": "vol_ratio_5_63", "ic_mean": -0.0047, "ic_t_nw": -1.0732, "ic_std": 0.1257, "ic_ir": -0.0374, "hit_rate": 0.4835, "n_days": 2422}, {"signal": "on_5", "ic_mean": -0.0059, "ic_t_nw": -1.1197, "ic_std": 0.1462, "ic_ir": -0.0402, "hit_rate": 0.4827, "n_days": 2422}, {"signal": "idio_vol_21", "ic_mean": -0.0057, "ic_t_nw": -1.1321, "ic_std": 0.1289, "ic_ir": -0.0441, "hit_rate": 0.4789, "n_days": 2422}, {"signal": "intra_5", "ic_mean": -0.0077, "ic_t_nw": -1.5854, "ic_std": 0.1499, "ic_ir": -0.0511, "hit_rate": 0.4802, "n_days": 2422}, {"signal": "park_vol_21", "ic_mean": -0.0098, "ic_t_nw": -1.6621, "ic_std": 0.1459, "ic_ir": -0.0671, "hit_rate": 0.4624, "n_days": 2422}, {"signal": "tot_vol_21", "ic_mean": -0.0101, "ic_t_nw": -1.7517, "ic_std": 0.1441, "ic_ir": -0.0699, "hit_rate": 0.4802, "n_days": 2422}, {"signal": "rsi_2", "ic_mean": -0.0076, "ic_t_nw": -1.9074, "ic_std": 0.1515, "ic_ir": -0.0502, "hit_rate": 0.4727, "n_days": 2422}, {"signal": "kurt_63", "ic_mean": -0.0105, "ic_t_nw": -2.2642, "ic_std": 0.118, "ic_ir": -0.0894, "hit_rate": 0.462, "n_days": 2422}, {"signal": "skew_63", "ic_mean": -0.0125, "ic_t_nw": -2.2772, "ic_std": 0.1356, "ic_ir": -0.0925, "hit_rate": 0.4806, "n_days": 2422}, {"signal": "idio_vol_63", "ic_mean": -0.0128, "ic_t_nw": -2.4561, "ic_std": 0.1312, "ic_ir": -0.0978, "hit_rate": 0.4459, "n_days": 2422}, {"signal": "ln_dollar_vol", "ic_mean": -0.0138, "ic_t_nw": -2.6406, "ic_std": 0.1317, "ic_ir": -0.1045, "hit_rate": 0.4645, "n_days": 2422}, {"signal": "vov_63", "ic_mean": -0.0134, "ic_t_nw": -2.7938, "ic_std": 0.1198, "ic_ir": -0.1115, "hit_rate": 0.4595, "n_days": 2422}, {"signal": "clv_1", "ic_mean": -0.0088, "ic_t_nw": -3.108, "ic_std": 0.1426, "ic_ir": -0.0619, "hit_rate": 0.4765, "n_days": 2422}, {"signal": "gap_abs_5", "ic_mean": -0.0179, "ic_t_nw": -3.1983, "ic_std": 0.1455, "ic_ir": -0.1229, "hit_rate": 0.4443, "n_days": 2422}, {"signal": "beta_mkt", "ic_mean": -0.0234, "ic_t_nw": -3.5465, "ic_std": 0.1604, "ic_ir": -0.1457, "hit_rate": 0.4356, "n_days": 2422}], "head": {"ann_return": 0.0309, "ann_vol": 0.0418, "sharpe": 0.7378, "sortino": 1.155, "max_dd": -0.051, "calmar": 0.605, "t_stat_nw": 2.1759, "hit_rate": 0.5078, "skew": 0.3412, "kurt": 3.8516, "n_days": 1666.0, "ic": 0.024, "ic_t": 3.86, "turnover": 39.8, "gross_sharpe": 0.984, "n_positions": 57.0, "gross_exp": 0.89}, "ablation": [{"variant": "FULL model", "ic": 0.023, "ic_t": 3.6961, "sharpe": 0.7387, "ann": 0.031}, {"variant": "drop reversal", "ic": 0.024, "ic_t": 3.7513, "sharpe": 0.6953, "ann": 0.029}, {"variant": "drop momentum", "ic": 0.0151, "ic_t": 2.4647, "sharpe": 0.341, "ann": 0.0134}, {"variant": "drop risk/vol", "ic": 0.0259, "ic_t": 4.1186, "sharpe": 0.8232, "ann": 0.0333}, {"variant": "drop liquidity", "ic": 0.0235, "ic_t": 3.5736, "sharpe": 0.7114, "ann": 0.0294}, {"variant": "drop overnight/intraday", "ic": 0.0254, "ic_t": 3.8877, "sharpe": 0.6975, "ann": 0.03}, {"variant": "drop price shape", "ic": 0.0244, "ic_t": 3.8331, "sharpe": 0.7678, "ann": 0.0338}, {"variant": "no regime context", "ic": 0.023, "ic_t": 3.6786, "sharpe": 0.6502, "ann": 0.0254}], "year_net": {"2020": {"ann": 0.0659, "sharpe": 1.27}, "2021": {"ann": -0.0008, "sharpe": -0.02}, "2022": {"ann": 0.0404, "sharpe": 1.03}, "2023": {"ann": 0.0326, "sharpe": 0.98}, "2024": {"ann": 0.0091, "sharpe": 0.22}, "2025": {"ann": 0.0805, "sharpe": 2.0}, "2026": {"ann": -0.0293, "sharpe": -0.57}}};</script>
+<script>
+(function(){
+const D = window.__DATA__;
+const NS = "http://www.w3.org/2000/svg";
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const el = (n, a) => { const e = document.createElementNS(NS, n);
+  for (const k in a) e.setAttribute(k, a[k]); return e; };
+const fmtPct = v => (v>=0?"+":"") + (v*100).toFixed(2) + "%";
+const fmtN  = (v,d=2) => (v>=0?"+":"") + v.toFixed(d);
+
+/* ---------------- tooltip ---------------- */
+const tip = document.getElementById("tip");
+function showTip(evt, html){
+  tip.innerHTML = html; tip.style.opacity = 1;
+  const r = tip.getBoundingClientRect();
+  let x = evt.clientX + 14, y = evt.clientY - r.height - 12;
+  if (x + r.width > innerWidth - 8) x = evt.clientX - r.width - 14;
+  if (y < 8) y = evt.clientY + 18;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+const hideTip = () => tip.style.opacity = 0;
+document.addEventListener("scroll", hideTip, {passive:true});
+
+/* ---------------- headline stats ---------------- */
+const H = D.head;
+const set = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
+set("s-sharpe", H.sharpe.toFixed(2));
+set("s-ann",  (H.ann_return*100).toFixed(1) + "%");
+set("s-vol",  (H.ann_vol*100).toFixed(1) + "%");
+set("s-dd",   (H.max_dd*100).toFixed(1) + "%");
+set("s-t",    H.t_stat_nw.toFixed(2));
+set("s-ic",   "+" + H.ic.toFixed(4));
+set("s-ict",  H.ic_t.toFixed(2));
+set("s-to",   H.turnover.toFixed(0) + "×");
+
+/* ---------------- univariate table ---------------- */
+(function(){
+  const tb = document.querySelector("#t-uni tbody"); if(!tb) return;
+  const rows = D.univariate.slice();
+  const pick = rows.slice(0,7).concat(rows.slice(-5).reverse());
+  const KEEP = new Set(["mom_252_21","rev_1","rev_5","dist_52w_high","rev_3","rev_5_sc",
+                        "mom_63","beta_mkt","gap_abs_5","clv_1","vov_63","ln_dollar_vol",
+                        "idio_vol_63"]);
+  const show = rows.filter(r => KEEP.has(r.signal));
+  show.sort((a,b) => b.ic_t_nw - a.ic_t_nw);
+  show.forEach(r => {
+    const tr = document.createElement("tr");
+    const cls = Math.abs(r.ic_t_nw) >= 2 ? (r.ic_t_nw>0 ? "pos":"neg") : "";
+    tr.innerHTML = `<td>${r.signal}</td>`
+      + `<td class="${cls}">${fmtN(r.ic_mean,4)}</td>`
+      + `<td class="${cls}">${fmtN(r.ic_t_nw,2)}</td>`
+      + `<td>${fmtN(r.ic_ir,3)}</td>`
+      + `<td>${(r.hit_rate*100).toFixed(1)}%</td>`;
+    tb.appendChild(tr);
+  });
+})();
+
+/* ---------------- year table ---------------- */
+(function(){
+  const tb = document.querySelector("#t-year tbody"); if(!tb) return;
+  Object.keys(D.year_net).sort().forEach(y => {
+    const r = D.year_net[y], ic = D.ic_year[y];
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${y}${y==="2026"?" · partial":""}</td>`
+      + `<td class="${r.ann>=0?"pos":"neg"}">${fmtPct(r.ann)}</td>`
+      + `<td class="${r.sharpe>=0?"pos":"neg"}">${fmtN(r.sharpe,2)}</td>`
+      + `<td>${ic!=null?fmtN(ic,4):"—"}</td>`;
+    tb.appendChild(tr);
+  });
+})();
+
+/* ================= chart 1: neutralisation ladder ================= */
+(function(){
+  const svg = document.getElementById("c-ladder"); if(!svg) return;
+  const W=760, Hh=210, L=168, Rr=118, T=14, B=26;
+  const d = D.ladder, n = d.length;
+  const lo = Math.min(0, ...d.map(x=>x.sharpe)), hi = Math.max(...d.map(x=>x.sharpe));
+  const pad = (hi-lo)*0.12;
+  const x = v => L + (v-(lo-pad))/((hi+pad)-(lo-pad))*(W-L-Rr);
+  const bh = 26, gap = (Hh-T-B-n*bh)/(n-1);
+  const zero = x(0);
+
+  svg.appendChild(el("line",{x1:zero,x2:zero,y1:T-4,y2:Hh-B+4,class:"zeroline"}));
+  d.forEach((r,i) => {
+    const y = T + i*(bh+gap);
+    const neg = r.sharpe < 0;
+    const x0 = neg ? x(r.sharpe) : zero, w = Math.abs(x(r.sharpe)-zero);
+    const g = el("g",{});
+    const rect = el("rect",{x:x0, y:y, width:Math.max(w,1.5), height:bh,
+      fill: neg ? css("--neg") : css("--accent-2"),
+      rx:4, style:"cursor:pointer"});
+    g.appendChild(rect);
+    const lab = el("text",{x:L-14, y:y+bh/2+4, "text-anchor":"end", class:"tick",
+      style:`font-size:11.5px;fill:${i===n-1?css("--ink"):css("--ink-2")};font-weight:${i===n-1?600:400}`});
+    lab.textContent = r.label; g.appendChild(lab);
+    const val = el("text",{x: W-6, y:y+bh/2+4, "text-anchor":"end", class:"tick",
+      style:`font-size:11.5px;font-weight:600;fill:${neg?css("--neg"):css("--accent")}`});
+    val.textContent = fmtN(r.sharpe,2) + "  t=" + fmtN(r.t,2); g.appendChild(val);
+    rect.addEventListener("mousemove", e => showTip(e,
+      `<b>${r.label}</b><div class="r"><span>Net Sharpe</span><b>${fmtN(r.sharpe,3)}</b></div>`
+      + `<div class="r"><span>Annual</span><b>${fmtPct(r.ann)}</b></div>`
+      + `<div class="r"><span>NW t-stat</span><b>${fmtN(r.t,2)}</b></div>`));
+    rect.addEventListener("mouseleave", hideTip);
+    svg.appendChild(g);
+  });
+  const z = el("text",{x:zero, y:Hh-8, "text-anchor":"middle", class:"tick"});
+  z.textContent = "0"; svg.appendChild(z);
+})();
+
+/* ================= generic line chart ================= */
+function lineChart(id, legendId, dates, series, opts){
+  const svg = document.getElementById(id); if(!svg) return;
+  opts = opts || {};
+  const vb = svg.getAttribute("viewBox").split(" ").map(Number);
+  const W = vb[2], Hh = vb[3], L = opts.left||52, Rr = 16, T = 14, B = 34;
+  const names = Object.keys(series);
+  const COL = [css("--s1"),css("--s2"),css("--s3"),css("--s4")];
+  let lo = Infinity, hi = -Infinity;
+  names.forEach(k => series[k].forEach(v => { if(v<lo)lo=v; if(v>hi)hi=v; }));
+  if (opts.includeZero){ lo = Math.min(lo,0); hi = Math.max(hi,0); }
+  const pad = (hi-lo)*0.08 || 0.1; lo -= pad; hi += pad;
+  const N = dates.length;
+  const X = i => L + i/(N-1)*(W-L-Rr);
+  const Y = v => T + (hi-v)/(hi-lo)*(Hh-T-B);
+
+  // grid + y ticks
+  const nt = 5;
+  for(let i=0;i<=nt;i++){
+    const v = lo + (hi-lo)*i/nt, y = Y(v);
+    svg.appendChild(el("line",{x1:L,x2:W-Rr,y1:y,y2:y,class:"axline"}));
+    const t = el("text",{x:L-9,y:y+3.5,"text-anchor":"end",class:"tick"});
+    t.textContent = opts.yfmt ? opts.yfmt(v) : v.toFixed(2);
+    svg.appendChild(t);
+  }
+  if (lo < 0 && hi > 0)
+    svg.appendChild(el("line",{x1:L,x2:W-Rr,y1:Y(0),y2:Y(0),class:"zeroline"}));
+
+  // x ticks: one per year
+  let lastYr = null;
+  dates.forEach((d,i) => {
+    const yr = d.slice(0,4);
+    if (yr !== lastYr){
+      lastYr = yr;
+      const t = el("text",{x:X(i),y:Hh-12,"text-anchor":"middle",class:"tick"});
+      t.textContent = yr; svg.appendChild(t);
+    }
+  });
+
+  names.forEach((k,si) => {
+    const pts = series[k].map((v,i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+    svg.appendChild(el("polyline",{points:pts, fill:"none", stroke:COL[si%4],
+      "stroke-width":si===0?2.4:1.7, "stroke-linejoin":"round","stroke-linecap":"round",
+      opacity: si===0?1:0.8}));
+  });
+
+  if (opts.endLabels){
+    // place end labels, then push apart so they never overlap
+    const lab = names.map((k,si) => ({k, si, y: Y(series[k][N-1]) - 9}));
+    lab.sort((a,b) => a.y - b.y);
+    for (let i=1;i<lab.length;i++)
+      if (lab[i].y - lab[i-1].y < 14) lab[i].y = lab[i-1].y + 14;
+    lab.forEach(o => {
+      const t = el("text",{x:X(N-1)-4, y:o.y, "text-anchor":"end", class:"tick",
+        style:`font-size:10.5px;font-weight:600;fill:${COL[o.si%4]}`});
+      t.textContent = o.k; svg.appendChild(t);
+    });
+  }
+
+  // hover crosshair
+  const cross = el("line",{x1:0,x2:0,y1:T,y2:Hh-B, stroke:css("--rule-2"),
+    "stroke-width":1, opacity:0});
+  svg.appendChild(cross);
+  const dots = names.map((k,si) => {
+    const c = el("circle",{r:4, fill:COL[si%4], stroke:css("--surface"),
+      "stroke-width":2, opacity:0}); svg.appendChild(c); return c; });
+  const hit = el("rect",{x:L,y:T,width:W-L-Rr,height:Hh-T-B,fill:"transparent",
+    style:"cursor:crosshair"});
+  svg.appendChild(hit);
+  hit.addEventListener("mousemove", e => {
+    const bb = svg.getBoundingClientRect();
+    const px = (e.clientX-bb.left)/bb.width*W;
+    let i = Math.round((px-L)/(W-L-Rr)*(N-1));
+    i = Math.max(0, Math.min(N-1, i));
+    cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i));
+    cross.setAttribute("opacity", 1);
+    let html = `<b>${dates[i]}</b>`;
+    names.forEach((k,si) => {
+      dots[si].setAttribute("cx", X(i)); dots[si].setAttribute("cy", Y(series[k][i]));
+      dots[si].setAttribute("opacity", 1);
+      html += `<div class="r"><span><i class="sw" style="background:${COL[si%4]}"></i>${k}</span>`
+           +  `<b>${opts.tipfmt ? opts.tipfmt(series[k][i]) : series[k][i].toFixed(3)}</b></div>`;
+    });
+    showTip(e, html);
+  });
+  hit.addEventListener("mouseleave", () => {
+    hideTip(); cross.setAttribute("opacity",0);
+    dots.forEach(d => d.setAttribute("opacity",0));
+  });
+
+  if (legendId){
+    const lg = document.getElementById(legendId);
+    if (lg) lg.innerHTML = names.map((k,si) =>
+      `<span><i style="background:${COL[si%4]}"></i>${k}</span>`).join("");
+  }
+}
+
+/* ================= chart 2: equity curves ================= */
+lineChart("c-eq","l-eq", D.equity.dates, D.equity.series, {
+  yfmt: v => ((v-1)*100).toFixed(0)+"%",
+  tipfmt: v => ((v-1)*100).toFixed(2)+"%",
+  left: 54, endLabels: true
+});
+
+/* ================= chart 3: rolling Sharpe ================= */
+lineChart("c-roll", null, D.rolling.dates, {"Rolling 12m Sharpe": D.rolling.values}, {
+  yfmt: v => v.toFixed(1), tipfmt: v => v.toFixed(2), includeZero:true, left:44
+});
+
+/* ================= chart 4: cost sensitivity ================= */
+(function(){
+  const svg = document.getElementById("c-cost"); if(!svg) return;
+  const W=760,Hh=300,L=54,Rr=18,T=16,B=44;
+  const bps = D.cost.bps;
+  const ser = {"Primary (76 names)": D.cost.primary};
+  if (D.cost.validation) ser["Validation (482 names)"] = D.cost.validation;
+  const names = Object.keys(ser);
+  const COL = [css("--s1"), css("--s2")];
+  let lo=Infinity, hi=-Infinity;
+  names.forEach(k => ser[k].forEach(v => {if(v<lo)lo=v; if(v>hi)hi=v;}));
+  lo = Math.min(lo,0)-0.15; hi += 0.15;
+  const X = v => L + v/Math.max(...bps)*(W-L-Rr);
+  const Y = v => T + (hi-v)/(hi-lo)*(Hh-T-B);
+  for(let i=0;i<=5;i++){
+    const v = lo+(hi-lo)*i/5, y=Y(v);
+    svg.appendChild(el("line",{x1:L,x2:W-Rr,y1:y,y2:y,class:"axline"}));
+    const t=el("text",{x:L-9,y:y+3.5,"text-anchor":"end",class:"tick"});
+    t.textContent=v.toFixed(1); svg.appendChild(t);
+  }
+  svg.appendChild(el("line",{x1:L,x2:W-Rr,y1:Y(0),y2:Y(0),class:"zeroline"}));
+  bps.forEach(b => {
+    const t=el("text",{x:X(b),y:Hh-22,"text-anchor":"middle",class:"tick"});
+    t.textContent=b; svg.appendChild(t);
+  });
+  const xl=el("text",{x:(L+W-Rr)/2,y:Hh-4,"text-anchor":"middle",class:"tick",
+    style:`fill:${css("--ink-3")}`});
+  xl.textContent="one-way cost (basis points)"; svg.appendChild(xl);
+  const yl=el("text",{x:14,y:Hh/2,"text-anchor":"middle",class:"tick",
+    transform:`rotate(-90 14 ${Hh/2})`, style:`fill:${css("--ink-3")}`});
+  yl.textContent="net Sharpe"; svg.appendChild(yl);
+
+  names.forEach((k,si) => {
+    const pts = ser[k].map((v,i)=>`${X(bps[i]).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+    svg.appendChild(el("polyline",{points:pts,fill:"none",stroke:COL[si],
+      "stroke-width":2.2,"stroke-linejoin":"round"}));
+    ser[k].forEach((v,i) => {
+      const c=el("circle",{cx:X(bps[i]),cy:Y(v),r:4.5,fill:COL[si],
+        stroke:css("--surface"),"stroke-width":2,style:"cursor:pointer"});
+      c.addEventListener("mousemove", e => showTip(e,
+        `<b>${k}</b><div class="r"><span>Cost</span><b>${bps[i]} bp</b></div>`
+        +`<div class="r"><span>Net Sharpe</span><b>${fmtN(v,3)}</b></div>`));
+      c.addEventListener("mouseleave", hideTip);
+      svg.appendChild(c);
+    });
+  });
+  const lg=document.getElementById("l-cost");
+  if(lg) lg.innerHTML = names.map((k,si)=>`<span><i style="background:${COL[si]}"></i>${k}</span>`).join("");
+})();
+
+/* ================= chart 5: null distribution ================= */
+(function(){
+  const svg=document.getElementById("c-null"); if(!svg) return;
+  const W=760,Hh=250,L=48,Rr=18,T=18,B=42;
+  const perm=D.null.perm, iid=D.null.iid0, model=D.null.model;
+  const all=perm.concat(iid).concat([model]);
+  const lo=Math.min(...all)-0.15, hi=Math.max(...all)+0.15;
+  const nb=22, bw=(hi-lo)/nb;
+  const bin = arr => { const c=new Array(nb).fill(0);
+    arr.forEach(v => { let k=Math.floor((v-lo)/bw); k=Math.max(0,Math.min(nb-1,k)); c[k]++; });
+    return c; };
+  const cp=bin(perm), ci=bin(iid);
+  const maxc=Math.max(...cp,...ci);
+  const X=v => L+(v-lo)/(hi-lo)*(W-L-Rr);
+  const Y=c => T+(1-c/maxc)*(Hh-T-B);
+  const bwpx=(W-L-Rr)/nb;
+
+  [[ci,css("--ink-3"),0.35,"i.i.d. random, zero cost"],
+   [cp,css("--s2"),0.75,"permutation null"]].forEach(([c,col,op,lab]) => {
+    c.forEach((v,i) => {
+      if(!v) return;
+      const x=X(lo+i*bw), y=Y(v);
+      const r=el("rect",{x:x+1,y:y,width:Math.max(bwpx-2,1),height:Hh-B-y,
+        fill:col,opacity:op,rx:2,style:"cursor:pointer"});
+      r.addEventListener("mousemove", e => showTip(e,
+        `<b>${lab}</b><div class="r"><span>Sharpe</span><b>${(lo+i*bw).toFixed(2)} to ${(lo+(i+1)*bw).toFixed(2)}</b></div>`
+        +`<div class="r"><span>Draws</span><b>${v}</b></div>`));
+      r.addEventListener("mouseleave", hideTip);
+      svg.appendChild(r);
+    });
+  });
+  svg.appendChild(el("line",{x1:L,x2:W-Rr,y1:Hh-B,y2:Hh-B,class:"zeroline"}));
+  for(let v=Math.ceil(lo*2)/2; v<=hi; v+=0.5){
+    const t=el("text",{x:X(v),y:Hh-24,"text-anchor":"middle",class:"tick"});
+    t.textContent=v.toFixed(1); svg.appendChild(t);
+  }
+  const xl=el("text",{x:(L+W-Rr)/2,y:Hh-6,"text-anchor":"middle",class:"tick",
+    style:`fill:${css("--ink-3")}`});
+  xl.textContent="net Sharpe ratio"; svg.appendChild(xl);
+  // model marker
+  const mx=X(model);
+  svg.appendChild(el("line",{x1:mx,x2:mx,y1:T-6,y2:Hh-B,stroke:css("--accent"),
+    "stroke-width":2.4}));
+  const mt=el("text",{x:mx,y:T-10,"text-anchor":"middle",class:"tick",
+    style:`font-size:11.5px;font-weight:600;fill:${css("--accent")}`});
+  mt.textContent="model "+model.toFixed(2); svg.appendChild(mt);
+  const lg=document.createElement("div");
+  const legend=[["permutation null",css("--s2"),.75],["i.i.d. random, zero cost",css("--ink-3"),.35]];
+  const host=svg.parentElement;
+  const div=document.createElement("div");
+  div.className="legend";
+  div.innerHTML=legend.map(([n,c,o])=>`<span><i style="background:${c};opacity:${o};height:9px;border-radius:2px"></i>${n}</span>`).join("");
+  host.insertBefore(div, svg);
+})();
+
+/* ================= chart 6: ablation ================= */
+(function(){
+  const svg=document.getElementById("c-abl"); if(!svg) return;
+  const W=760,Hh=300,L=196,Rr=76,T=12,B=30;
+  const full=D.ablation.find(r=>r.variant==="FULL model").sharpe;
+  const rows=D.ablation.filter(r=>r.variant!=="FULL model")
+    .map(r=>({label:r.variant.replace("drop ","").replace("no regime context","regime context"),
+              delta:r.sharpe-full, sharpe:r.sharpe, ic:r.ic}))
+    .sort((a,b)=>a.delta-b.delta);
+  const lo=Math.min(...rows.map(r=>r.delta)), hi=Math.max(...rows.map(r=>r.delta));
+  const span=Math.max(Math.abs(lo),Math.abs(hi))*1.25;
+  const X=v=>L+(v+span)/(2*span)*(W-L-Rr);
+  const n=rows.length, bh=20, gap=(Hh-T-B-n*bh)/(n-1);
+  const zero=X(0);
+  svg.appendChild(el("line",{x1:zero,x2:zero,y1:T-2,y2:Hh-B+2,class:"zeroline"}));
+  rows.forEach((r,i)=>{
+    const y=T+i*(bh+gap), neg=r.delta<0;
+    const x0=neg?X(r.delta):zero, w=Math.abs(X(r.delta)-zero);
+    const rect=el("rect",{x:x0,y:y,width:Math.max(w,1.5),height:bh,rx:3,
+      fill:neg?css("--accent-2"):css("--s2"),style:"cursor:pointer"});
+    rect.addEventListener("mousemove",e=>showTip(e,
+      `<b>drop ${r.label}</b><div class="r"><span>&Delta; Sharpe</span><b>${fmtN(r.delta,3)}</b></div>`
+      +`<div class="r"><span>Sharpe</span><b>${fmtN(r.sharpe,3)}</b></div>`
+      +`<div class="r"><span>OOS IC</span><b>${fmtN(r.ic,4)}</b></div>`));
+    rect.addEventListener("mouseleave",hideTip);
+    svg.appendChild(rect);
+    const lab=el("text",{x:L-12,y:y+bh/2+4,"text-anchor":"end",class:"tick",
+      style:`font-size:11px;fill:${css("--ink-2")}`});
+    lab.textContent="drop "+r.label; svg.appendChild(lab);
+    const val=el("text",{x:W-6,y:y+bh/2+4,"text-anchor":"end",
+      class:"tick",style:`font-size:11px;font-weight:600;fill:${neg?css("--accent"):css("--s2")}`});
+    val.textContent=fmtN(r.delta,3); svg.appendChild(val);
+  });
+  const c1=el("text",{x:zero-10,y:Hh-10,"text-anchor":"end",class:"tick",
+    style:`fill:${css("--ink-3")};font-size:10px`});
+  c1.textContent="← block was carrying weight"; svg.appendChild(c1);
+  const c2=el("text",{x:zero+10,y:Hh-10,"text-anchor":"start",class:"tick",
+    style:`fill:${css("--ink-3")};font-size:10px`});
+  c2.textContent="block was hurting →"; svg.appendChild(c2);
+})();
+})();
+</script>
+
+</body>
+</html>

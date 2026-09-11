@@ -1,0 +1,44 @@
+50 features, 177,709 rows
+walk-forward done [216s]  OOS rows=124,264 dates 2020-01-06..2026-08-21  blocks=27
+
+=== OUT-OF-SAMPLE IC (model prediction vs fwd 5d residual rank) ===
+     fwd 5d residual: IC=+0.0240  NW t=+3.86  IR=+0.167  hit=0.571
+     fwd 3d residual: IC=+0.0202  NW t=+3.96  IR=+0.136  hit=0.553
+    fwd 10d residual: IC=+0.0293  NW t=+3.63  IR=+0.211  hit=0.591
+          fwd 5d RAW: IC=+0.0016  NW t=+0.19
+
+=== IC by year ===
+  2020: IC=+0.0437 t=+2.94 n=18,072
+  2021: IC=+0.0101 t=+0.60 n=18,353
+  2022: IC=+0.0100 t=+0.56 n=18,550
+  2023: IC=+0.0227 t=+1.28 n=18,977
+  2024: IC=+0.0237 t=+1.64 n=19,152
+  2025: IC=+0.0410 t=+2.96 n=19,000
+  2026: IC=+0.0128 t=+1.01 n=12,160
+
+=== IC by VIX tercile ===
+  lowVIX: IC=+0.0231 t=+2.18
+  mid: IC=+0.0229 t=+2.52
+  highVIX: IC=+0.0260 t=+2.54
+
+=== top 20 feature importances ===
+z_beta_mkt              206.222222
+z_mom_252_21            174.592593
+z_amihud_21             149.370370
+z_mom_63                144.888889
+z_dist_52w_low          143.333333
+z_vov_63                138.888889
+z_ln_dollar_vol         138.481481
+z_skew_63               135.666667
+z_dist_52w_high         120.111111
+z_idio_vol_63           116.925926
+mkt_vol_21              109.814815
+corr_proxy              108.814815
+z_on_21                 103.000000
+z_semidev_21            101.518519
+z_kurt_63                92.481481
+z_park_vol_21            90.185185
+z_on_intra_spread_21     88.962963
+z_idio_vol_21            87.185185
+z_tot_vol_21             85.962963
+z_rsi_14                 71.777778

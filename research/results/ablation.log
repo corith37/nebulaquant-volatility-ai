@@ -1,0 +1,13 @@
+=== FEATURE-BLOCK ABLATION (leave-one-block-out) ===
+  FULL model               IC=+0.0230(t+3.70)  netSharpe=+0.739  ann=+3.10%
+  drop reversal            IC=+0.0240(t+3.75)  netSharpe=+0.695  ann=+2.90%
+  drop momentum            IC=+0.0151(t+2.46)  netSharpe=+0.341  ann=+1.34%
+  drop risk/vol            IC=+0.0259(t+4.12)  netSharpe=+0.823  ann=+3.33%
+  drop liquidity           IC=+0.0235(t+3.57)  netSharpe=+0.711  ann=+2.94%
+  drop overnight/intraday  IC=+0.0254(t+3.89)  netSharpe=+0.697  ann=+3.00%
+  drop price shape         IC=+0.0244(t+3.83)  netSharpe=+0.768  ann=+3.38%
+/home/claude/quant/src/stats.py:42: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  return sps.spearmanr(a[m], b[m]).statistic
+  regime context only      IC=+nan(t+nan)  netSharpe=+nan  ann=+0.00%
+  no regime context        IC=+0.0230(t+3.68)  netSharpe=+0.650  ann=+2.54%
+saved out/ablation.csv

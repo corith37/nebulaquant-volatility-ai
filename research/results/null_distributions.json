@@ -1,0 +1,23 @@
+{
+  "permutation_null_cost_2.5bp": {
+    "n": 40,
+    "mean": -0.4499,
+    "sd": 0.3486,
+    "min": -1.2356,
+    "max": 0.226,
+    "model": 0.738,
+    "p_value": 0.0
+  },
+  "iid_null_cost_0bp": {
+    "n": 40,
+    "mean": -0.0448,
+    "sd": 0.3468,
+    "min": -0.6379,
+    "max": 0.7353,
+    "p95": 0.5752,
+    "model_zero_cost": 0.984,
+    "p_value_vs_model_zero_cost": 0.0,
+    "p_value_vs_model_costed": 0.0
+  },
+  "note": "Permutation shuffles model predictions across tickers within each date, preserving the signal's distribution and destroying only its alignment with returns. Cost-matched to the model. The iid null is drawn at zero cost, so the like-for-like comparison is against the model's zero-cost Sharpe."
+}
