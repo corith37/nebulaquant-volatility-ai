@@ -131,13 +131,69 @@ nebulaquant-volatility-ai/
 
 ---
 
-## Setup
+## Running it (Windows PowerShell)
 
-```bash
+### First-time setup
+
+Run from the repo root:
+
+```powershell
 python -m venv .venv
-# Windows PowerShell:  .venv\Scripts\Activate.ps1
-# macOS/Linux:         source .venv/bin/activate
-pip install -r requirements.txt   # optuna is optional; random-search fallback otherwise
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install lightgbm pyarrow
+```
+
+`lightgbm` and `pyarrow` are only needed for the research pipeline. On macOS/Linux,
+activate with `source .venv/bin/activate` instead.
+
+### Every new terminal
+
+Run from the repo root. Note the leading dot. Your prompt should start with
+`(.venv)` afterwards — if it doesn't, every command below fails with
+`ModuleNotFoundError`, because it is using your system Python.
+
+```powershell
+cd path\to\nebulaquant-volatility-ai
+.\.venv\Scripts\Activate.ps1
+```
+
+### Momentum bot
+
+Run from the repo root.
+
+```powershell
+python scripts/download_data.py
+python scripts/build_dataset.py
+python scripts/run_momentum_backtest.py
+python scripts/run_momentum_scanner.py
+streamlit run app/streamlit_app.py
+```
+
+### Research pipeline
+
+Run from inside `research\`. Keep the venv active.
+
+```powershell
+cd research
+python build_panel.py
+python build_dataset.py
+python train_wf.py
+python run_backtest2.py
+python robustness.py
+python run_ic_study.py
+python ablation.py
+```
+
+### Wide universe (503 names)
+
+Run from inside `research\`. Takes about 70 minutes.
+
+```powershell
+python download_wide.py
+python build_panel.py --raw data_raw_wide --out data_proc_wide
+python build_features.py --in data_proc_wide --min-names 100 --exclude MNST
+python run_wide.py
 ```
 
 ---
